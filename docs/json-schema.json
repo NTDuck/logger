@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LogRecord",
+  "type": "object",
+  "properties": {
+    "Application_Name": {
+      "type": "string",
+      "description": "Name of the application generating the log."
+    },
+    "Log_Level": {
+      "type": "string",
+      "enum": ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
+      "description": "Severity level of the log."
+    },
+    "Message": {
+      "type": "string",
+      "description": "The log message."
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional ISO8601 timestamp. If omitted, the ingestion server sets the time upon receipt."
+    },
+    "Trace_ID": {
+      "type": "string",
+      "description": "Optional distributed tracing ID."
+    },
+    "Error_Code": {
+      "type": "string",
+      "description": "Optional explicit error code for grouping/signatures."
+    }
+  },
+  "required": [
+    "Application_Name",
+    "Log_Level",
+    "Message"
+  ],
+  "additionalProperties": false
+}
