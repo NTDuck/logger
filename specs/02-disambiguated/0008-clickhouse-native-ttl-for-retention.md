@@ -13,7 +13,7 @@ Additionally, allowing a System Admin to configure the retention threshold dynam
 We will manage DB Retention strictly via ClickHouse native TTL (Time-To-Live) configurations (e.g., `TTL timestamp + INTERVAL 7 DAY DELETE WHERE level = 'INFO'`) defined in Infrastructure-as-Code.
 - The retention policy will be configured via an environment variable (e.g., `LOG_RETENTION_DAYS=7`).
 - A database initialization script will read this variable and apply the `CREATE TABLE ... TTL` statement.
-- We explicitly reject allowing the Viewer or any runtime services to execute DDL mutations for log cleanup. If the TTL must change, it must be updated via infrastructure deployment.
+- We explicitly reject allowing the Viewer or any runtime services to execute DDL mutations for log cleanup. If the TTL must change, it must be updated via infrastructure deployment. The Admin Dashboard can display the current TTL (by querying the `system.tables` dictionary in ClickHouse), but it should never be granted the database privileges required to execute `ALTER TABLE`.
 
 ## Consequences
 - **Positive**: Data eviction is managed predictably and optimally by the ClickHouse background merge processes without manual application-layer intervention.

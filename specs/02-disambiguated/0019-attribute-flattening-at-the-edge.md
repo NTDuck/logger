@@ -4,26 +4,26 @@
 Accepted
 
 ## Context
-We are supporting structured logging where clients can submit dynamic key-value properties. Often, these logs come in via OTLP (OpenTelemetry Protocol). OTLP natively represents dynamic properties as highly nested `repeated KeyValue` arrays with `AnyValue` unions (e.g., `[{"key": "http", "value": {"kvlistValue": {"values": [{"key": "status", "value": {"intValue": 200}}]}}}]`).
+We are supporting structured logging where clients can submit dynamic key-value properties. Often, these logs come in via OTLP (OpenTelemetry Protocol). OTLP natively represents dynamic properties as highly nested `repeated KeyValue` arrays with `AnyValue` unions (e.g., `[{"key": "http.status", "value": {"intValue": 200}}]`).
 
-This structure is highly optimized for network serialization (compact binary over gRPC). However, writing this raw, heavily nested array schema directly into ClickHouse is catastrophic for analytical queries.
+This structure is highly optimized for network transport efficiency (compact binary over gRPC). However, writing this rigid, nested array schema directly into our storage format is a critical design decision.
 
 ## Alternatives Considered & The Debate
-During the architecture review, the mapping between transport schema and storage schema was heavily scrutinized.
+During the architecture review, the mapping between the Transport Schema and Storage Schema was heavily scrutinized.
 
 1. **Store Raw OTLP in ClickHouse (Rejected)**
-   Pipe the rigid, highly nested OTLP `KeyValue` arrays directly into ClickHouse and rely on advanced array-extraction SQL functions during reads.
-   *Why it was rejected:* This destroys query ergonomics. An engineer would have to write complex, unreadable SQL using `arrayFilter` or higher-order functions just to filter by an HTTP status code. Furthermore, ClickHouse's native JSON indices and bloom filters cannot efficiently index these abstract generic arrays. Query performance would tank.
+   Pipe the highly nested OTLP `KeyValue` arrays directly into ClickHouse and rely on advanced array-extraction SQL functions during reads.
+   *Why it was rejected:* Raw OTLP storage destroys ClickHouse performance. Querying nested arrays requires expensive lambda functions: `arrayExists(x -> x.key = 'http.status' AND x.value = '200', attributes)`. This forces full table scans with complex per-row evaluation, completely bypassing ClickHouse's vectorized execution, bloom filters, and skip indexes. 50ms queries would become 5-10 second queries at scale, bringing the cluster to its knees. OTLP is a Transport Protocol, not a Storage Format.
 
 2. **Attribute Flattening at the Edge (Accepted)**
-   Explicitly decouple the OTLP Transport Schema from the ClickHouse Storage Schema. Enforce a rule that the Edge Receiver must iterate over the OTLP attributes and flatten them into a simple, flat JSON map (e.g., `{"http.status": 200}`) before putting the data onto the `logs-raw` topic.
+   Explicitly decouple the Transport Schema from the Storage Schema. The Edge Receiver accepts strict, official OTLP Protobufs, but before putting the data into the pipeline, it performs a cheap `O(n)` iteration over the attributes to flatten them into a standard, single-level Map/JSON dictionary (e.g., `{"http.status": 200}`).
 
 ## Decision
-We will strictly enforce **Attribute Flattening at the Edge Receiver**. Raw OTLP `KeyValue` arrays will **never** reach ClickHouse or pollute the internal pipeline. 
+We will strictly enforce **Attribute Flattening at the Receiver**. Raw OTLP `KeyValue` arrays will **never** reach ClickHouse or pollute the internal pipeline. This is a non-negotiable architectural invariant.
 
-The Edge Receiver will perform a cheap `O(n)` iteration over incoming attributes, transforming the transport-optimized array into an OLAP-optimized flat JSON/Map payload.
+The Receiver will act as a bilingual translator: accepting highly efficient gRPC OTLP on the wire, but instantly transforming it into an OLAP-optimized flattened Map/JSON payload before publishing to the `logs-raw` Redpanda topic.
 
 ## Consequences
-- **Positive**: Dramatically simplifies downstream processing for the Normalization Workers and the AI Consumers.
-- **Positive**: Makes ClickHouse JSON queries incredibly fast and ergonomic. Engineers can write simple queries like `SELECT * FROM logs WHERE attributes['http.status'] = 200`, which utilize ClickHouse's native bloom filters and execute in milliseconds.
-- **Negative**: The Edge Receiver must expend extra CPU cycles to unpack, iterate, and reconstruct the JSON payloads during high-speed ingestion. However, doing this at the very edge is far cheaper than paying the I/O and CPU penalty on every database read.
+- **Positive**: Makes ClickHouse JSON/Map queries incredibly fast. Engineers can write simple queries like `attributes['http.status'] = 200`, which natively leverage ClickHouse bloom filters, secondary indexes, and columnar compression for millisecond responses at petabyte scale.
+- **Positive**: Maintains 100% OTLP compatibility for standard clients (Grafana Alloy, OpenTelemetry Collector) while protecting our database read performance.
+- **Positive**: The cost of flattening at ingestion is a trivial, one-time `O(n)` CPU operation, which is far cheaper than the catastrophic I/O cost of bad array queries at read time.

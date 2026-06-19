@@ -1,33 +1,35 @@
-# 0018. Control Plane Configuration Architecture
+# 0018. Append-Only Configuration Stream
 
 ## Status
 Accepted
 
 ## Context
-The system is heavily decoupled, consisting of an Edge Receiver, Normalization Workers, DB Writers, AI Consumers, and an Alert Consumer. These stateless services rely on dynamic configurations configured by System Admins (e.g., alert thresholds, deduplication rules, schema guardrails, attribute projection rules). 
+The system is heavily decoupled, consisting of an Edge Receiver, Normalization Workers, DB Writers, AI Consumers, and an Alert Consumer. These stateless services rely on dynamic configurations configured by System Admins (e.g., changing the alert threshold for an app from 100 errors/minute to 50 errors/minute). 
 
-We need a Control Plane mechanism to propagate configuration changes across all isolated Docker containers in real-time without requiring rolling restarts, while avoiding split-brain or cold-boot synchronization issues.
+We must propagate these configuration changes to the active consumers in real-time, without forcing our high-speed workers to execute slow SQL polling queries or introducing a secondary relational database (PostgreSQL) just for admin configs. 
 
 ## Alternatives Considered & The Debate
-Managing state across highly decoupled microservices (or modular monolith containers) presents synchronization challenges.
+Managing state across decoupled microservices presents massive synchronization challenges.
 
-1. **Redis as the Sole Source of Truth (Rejected)**
-   Store all configurations in Redis and have services query Redis on boot or via polling.
-   *Why it was rejected:* Redis is excellent for ephemeral caching and high-speed Pub/Sub, but treating it as durable configuration storage introduces cold-boot flakiness. If Redis goes down or evicts keys, the system loses its configuration state and cannot boot reliably. 
+1. **Redis Persistent State Store via AOF (Rejected)**
+   Store configurations in Redis and configure Redis with Append Only File (AOF) enabled so the Admin configurations survive container restarts.
+   *Why it was rejected:* We decided to keep Redis strictly as a volatile, ephemeral cache. Treating a caching layer as a persistent primary database complicates the infrastructure footprint. However, if Redis restarts and wipes memory, we lose the configurations.
 
-2. **ClickHouse Polling (Rejected)**
-   Store configurations in ClickHouse and have services periodically poll the database for changes.
-   *Why it was rejected:* ClickHouse is not designed for high-frequency point lookups or polling. It introduces latency to "real-time" configuration updates and unnecessarily burdens the OLAP engine.
+2. **ClickHouse Mutation Updates (Rejected)**
+   Use ClickHouse as the source of truth, and execute `UPDATE admin_configs SET threshold = 50` when the admin changes a value.
+   *Why it was rejected:* This is the OLAP mutation trap. ClickHouse executes mutations asynchronously by rewriting entire data parts on disk. Using an OLAP engine for row-level, OLTP-style state mutations is a massive architectural anti-pattern that causes locking issues and storage fragmentation.
 
-3. **Hybrid: ClickHouse + Redis Pub/Sub (Accepted)**
-   Use ClickHouse as the durable, append-only source of truth for dynamic configurations. Use Redis Pub/Sub exclusively for real-time cache invalidation signaling.
+3. **Append-Only Configuration Stream with Boot-Time Cache Warming (Accepted)**
+   Use ClickHouse as the absolute source of truth, but strictly through an append-only pattern. Use Redis Pub/Sub purely for real-time cache invalidations.
 
 ## Decision
-We will cleanly separate durable configuration storage from ephemeral signaling.
-- **ClickHouse** acts as the append-only source of truth. When a service (like the Alert Consumer) boots from a cold state, it queries ClickHouse once to warm its in-memory configuration cache.
-- **Redis Pub/Sub** is used for hot-reloading. When an admin updates a threshold, the API saves the durable record to ClickHouse, and then blasts an invalidation signal via Redis Pub/Sub. The running services instantly catch the signal and reload their cache.
+We strictly commit to the **Append-Only Configuration Stream** pattern. There will be absolutely no mutations (`UPDATE` statements) in the OLAP database.
+
+1. **The Append-Only SoT:** We create an `alert_configs` table in ClickHouse using the `ReplacingMergeTree` engine. When the Admin changes a threshold, the Viewer executes a pure `INSERT` of a brand new row (e.g., `('payment_api', 50, timestamp)`).
+2. **Real-Time Updates:** Immediately after inserting, the Viewer publishes to a Redis Pub/Sub channel (`config-updates: payment_api=50`). Active Alert Consumers instantly catch the signal and update their in-memory `HashMap` (zero DB queries, memory-speed latency).
+3. **Boot-Time Cache Warming:** If an Alert Consumer cold-boots (or Redis crashes), it executes a single lightning-fast query against ClickHouse: `SELECT app_name, argMax(threshold, timestamp) FROM alert_configs GROUP BY app_name`. This rebuilds the local cache instantly, entirely bypassing the need for Redis persistence.
 
 ## Consequences
-- **Positive**: Solidifies the architecture by ensuring services can boot reliably from a durable cold state (ClickHouse) without depending on transient data stores.
-- **Positive**: Achieves true real-time configuration propagation (via Redis) without polling the database.
-- **Negative**: Increases the complexity of service startup routines, as they must handle initial ClickHouse querying and subsequent Redis subscription management.
+- **Positive**: Protects the OLAP database from mutation penalties and locking issues, as we strictly use `INSERT` and `argMax` aggregation.
+- **Positive**: Keeps the fast Alert Consumer workers running at pure memory speed, as runtime configurations are read directly from local RAM.
+- **Positive**: Allows Redis to remain a strictly volatile, ephemeral cache without risking configuration loss on a cold boot.

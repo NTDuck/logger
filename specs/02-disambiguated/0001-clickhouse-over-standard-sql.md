@@ -8,7 +8,7 @@ The system was presented with a foundational requirement to build a "Log Collect
 
 During the initial design phase, there was an inclination to use off-the-shelf log aggregators like Loki paired with Grafana for the dashboard to quickly satisfy the monitoring and deduplication requirements. However, relying on Loki and Grafana would completely bypass the core systems engineering challenge of designing a database schema optimized for fast writing and building a custom real-time frontend. 
 
-Furthermore, research and case studies indicated that Loki performs poorly under heavy, concurrent workloads and has limited vertical scalability, making it unsuitable for the extreme write throughput expected from the ingestion matrix.
+Furthermore, research and case studies (e.g., Bank Raya's case study) indicated that Loki performs poorly under heavy, concurrent workloads and has limited vertical scalability, making it unsuitable for the extreme write throughput expected from the ingestion matrix.
 
 The system needed a database that could:
 1. Sustain extreme write throughput without crashing.

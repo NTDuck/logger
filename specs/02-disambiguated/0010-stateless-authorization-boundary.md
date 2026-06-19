@@ -6,7 +6,7 @@ Accepted
 ## Context
 The system has a strict Display Permission Control requirement: Engineers must only be able to view real-time logs for the specific applications they manage. 
 The Viewer's backend is a high-speed WebSocket server that tails the Redpanda stream and pushes thousands of logs per second directly from memory to connected clients. If the WebSocket server is required to query a stateful database (like PostgreSQL or Redis) to check "Is Engineer A allowed to see App X?" every time a log arrives—or even on every connection—it introduces a massive latency bottleneck that defeats the purpose of the real-time stream.
-Alternatively, enforcing permissions purely in the UI frontend (by hiding logs the user shouldn't see) represents a critical security vulnerability, as malicious users could simply inspect the WebSocket frames in their browser.
+Alternatively, enforcing permissions purely in the UI frontend (by hiding logs the user shouldn't see) represents a critical security vulnerability, as malicious users could simply inspect the WebSocket frames in their browser network tab.
 
 ## Decision
 We will implement a strictly stateless authorization boundary at the edge, utilizing in-memory JWT (JSON Web Token) Stateless Claims within the WebSocket server.

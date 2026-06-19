@@ -25,4 +25,4 @@ Attribute Projection is a Viewer-layer SQL rewriting system. It transparently ma
 - **Positive**: Completely eliminates the risk of race conditions between Rust ingestion workers and ClickHouse schema migrations.
 - **Positive**: Adheres strictly to the "dumb pipes, smart endpoints" philosophy. The ingestion system remains incredibly fast and simple.
 - **Positive**: The Viewer layer can safely handle query rewriting without touching the underlying database schema.
-- **Negative**: Clients bear the burden of optimization. For maximum query performance, developers must proactively extract their most frequently filtered fields into root-level key-value pairs during log ingestion, aided by our provided helper libraries.
+- **Negative**: Clients bear the burden of optimization. For maximum query performance, developers must proactively extract their most frequently filtered fields into root-level key-value pairs during log ingestion, aided by our provided helper libraries. As a general heuristic, any attribute that appears in a `WHERE` clause more than 5% of the time should be extracted.

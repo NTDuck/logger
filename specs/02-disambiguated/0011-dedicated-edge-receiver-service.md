@@ -13,7 +13,8 @@ We will introduce a dedicated, lightweight Edge Receiver service (API Gateway) b
 This service will be strictly responsible for:
 1. Terminating external connections and accepting payloads.
 2. Authenticating clients (e.g., verifying API keys).
-3. Acting as a pure, high-speed Kafka Producer that instantly proxies raw payloads into the Redpanda broker and returns a `202 Accepted` response.
+3. Performing Canonical Translation to map various external formats (like OTLP Protobuf or custom HTTP JSON) into our internal `StructuredLog` struct.
+4. Acting as a pure, high-speed Kafka Producer that instantly proxies the mapped payloads into the Redpanda broker and returns a `202 Accepted` response.
 
 ## Consequences
 - **Positive**: Keeps the core Worker pure and focused strictly on CPU-heavy business logic, normalization, and DB insertions.

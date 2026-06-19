@@ -13,7 +13,7 @@ We will create a separate, tiny summary table (e.g., `hourly_error_stats`) using
 The Viewer dashboard will strictly query the summary table and is prohibited from executing on-the-fly `GROUP BY` aggregations against the raw `logs` table.
 
 ## Consequences
-- **Positive**: Dashboard charts render in milliseconds because they only query a few dozen pre-computed rows rather than scanning massive datasets.
+- **Positive**: Dashboard charts render in less than 2 milliseconds because they only query a few dozen pre-computed rows rather than scanning massive datasets.
 - **Positive**: Drastically reduces CPU and I/O load on the ClickHouse cluster, isolating the analytical reporting overhead from the raw ingestion path.
 - **Negative**: Increases write amplification slightly, as the database must maintain the materialized view during inserts.
 - **Negative**: Materialized View definitions must be carefully planned and managed during database schema migrations.

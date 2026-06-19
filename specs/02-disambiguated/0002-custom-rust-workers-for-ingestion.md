@@ -6,9 +6,9 @@ Accepted
 ## Context
 The system architecture mandates a "Log Parsing & Filtering Engine Subsystem" where Workers consume raw log data from a Message Queue, clean it, and store it into the database. 
 
-Initially, there was consideration for using off-the-shelf data collectors and integration tools to handle the pipeline. Specifically, the proposed pipeline involved using Telegraf (InfluxData's data collector) to forward metrics to Kafka, which would then stream directly into ClickHouse via its native Kafka engine. 
+Initially, there was consideration for using off-the-shelf data collectors and integration tools to handle the pipeline. Specifically, the proposed pipeline involved using Telegraf (InfluxData's data collector) to forward metrics to Kafka, which would then stream directly into ClickHouse via its native Kafka engine. Alternatively, some manage the integration with the standard Telegraf SQL output plugin.
 
-However, this off-the-shelf approach presented a major contradiction with the system requirements. If Telegraf and ClickHouse's Kafka engine automatically streamed data directly from the queue to the database, it would completely bypass the need for custom Workers to perform policy-based normalization, character extraction, and dynamic routing (such as instantly forwarding `CRITICAL` or `ERROR` logs to a priority alert queue). 
+However, this off-the-shelf approach presented a major contradiction with the system requirements. If Telegraf and ClickHouse's Kafka engine (or the standard Telegraf SQL output plugin) automatically streamed data directly from the queue to the database, it would completely bypass the need for custom Workers to perform policy-based normalization, character extraction, and dynamic routing (such as instantly forwarding `CRITICAL` or `ERROR` logs to a priority alert queue). 
 
 Standard ecosystem tools like Telegraf, Logstash, or Vector, while easy to set up initially, often become rigid and difficult to configure when highly specific, custom business logic is required in the ingestion path.
 
