@@ -1,4 +1,0 @@
-catalogs:
-  - name: community
-    url: https://github.com/github/specify-extension-catalog
-    install_allowed: true
