@@ -1,4 +1,4 @@
-# 0013. Alert Fingerprints for Deterministic Deduplication
+# 0012. Alert Fingerprints for Deterministic Deduplication
 
 ## Status
 Accepted

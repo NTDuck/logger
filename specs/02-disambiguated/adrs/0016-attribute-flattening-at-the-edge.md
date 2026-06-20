@@ -1,4 +1,4 @@
-# 0019. Attribute Flattening at the Edge
+# 0016. Attribute Flattening at the Edge
 
 ## Status
 Accepted

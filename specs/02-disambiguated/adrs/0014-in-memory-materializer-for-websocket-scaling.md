@@ -1,4 +1,4 @@
-# 0017. Broadcast Consumer Pattern for WebSocket Scaling
+# 0014. Broadcast Consumer Pattern for WebSocket Scaling
 
 ## Status
 Accepted

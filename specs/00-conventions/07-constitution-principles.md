@@ -4,7 +4,7 @@ This document is the authoritative, comprehensive constitution governing the `lo
 
 ## I. Architecture and Correctness (Concrete Service-Oriented Architecture)
 
-The `logger` ecosystem strictly adheres to a **Concrete Service-Oriented Architecture (SoA)** (ADR-0023). Our architectural philosophy fundamentally rejects the dogmatic enforcement of pure, workspace-wide Clean Architecture. While global abstraction layers isolate the domain, they inherently produce "leaky abstractions" when interacting with specialized infrastructure (e.g., Redpanda stream processing, ClickHouse columnar aggregations). Hiding these technologies behind lowest-common-denominator interfaces destroys our leverage over their unique capabilities.
+The `logger` ecosystem strictly adheres to a **Concrete Service-Oriented Architecture (SoA)** (ADR-0020). Our architectural philosophy fundamentally rejects the dogmatic enforcement of pure, workspace-wide Clean Architecture. While global abstraction layers isolate the domain, they inherently produce "leaky abstractions" when interacting with specialized infrastructure (e.g., Redpanda stream processing, ClickHouse columnar aggregations). Hiding these technologies behind lowest-common-denominator interfaces destroys our leverage over their unique capabilities.
 
 Instead, we enforce correctness, multi-core scalability, and modularity through **pragmatic, localized boundaries**:
 

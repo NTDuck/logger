@@ -20,7 +20,7 @@ graph TD
 
 ## 2. Performance and Data Ownership Conventions
 
-To balance maximal performance with multi-core scalability, we adhere to pragmatic performance rules (ADR-0024).
+To balance maximal performance with multi-core scalability, we adhere to pragmatic performance rules (ADR-0021).
 
 ### 2.1 Smart Pointers & Concurrency
 - **Default to `Arc` for Shared State**: In a Tokio async ecosystem, shared dependencies must be `Send + Sync` to utilize multi-core work-stealing. Therefore, `::std::sync::Arc` is the default for shared architectural dependencies. 

@@ -1,4 +1,4 @@
-# 0020. Multi-Topic Topology for Data Fan-Out
+# 0017. Multi-Topic Topology for Data Fan-Out
 
 ## Status
 Accepted

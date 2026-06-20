@@ -1,4 +1,4 @@
-# 0023. Concrete SoA over Clean Architecture
+# 0020. Concrete SoA over Clean Architecture
 
 ## Status
 Accepted

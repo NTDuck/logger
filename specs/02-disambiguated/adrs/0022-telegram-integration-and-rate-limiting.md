@@ -1,4 +1,4 @@
-# 0025. Telegram Integration & Rate Limiting
+# 0022. Telegram Integration & Rate Limiting
 
 ## Status
 Accepted

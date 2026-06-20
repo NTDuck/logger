@@ -1,4 +1,4 @@
-# 0026. Tumbling Window for Alert Deduplication
+# 0023. Tumbling Window for Alert Deduplication
 
 ## Status
 Accepted

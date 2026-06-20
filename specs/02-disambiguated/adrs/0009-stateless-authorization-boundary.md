@@ -1,4 +1,4 @@
-# 0010. Stateless Authorization Boundary
+# 0009. Stateless Authorization Boundary
 
 ## Status
 Accepted

@@ -1,4 +1,4 @@
-# 0008. ClickHouse Native TTL for Log Retention
+# 0007. ClickHouse Native TTL for Log Retention
 
 ## Status
 Accepted

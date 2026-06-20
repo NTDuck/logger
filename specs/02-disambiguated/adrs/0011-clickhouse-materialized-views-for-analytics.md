@@ -1,4 +1,4 @@
-# 0012. ClickHouse Materialized Views for Analytics
+# 0011. ClickHouse Materialized Views for Analytics
 
 ## Status
 Accepted

@@ -1,4 +1,4 @@
-# 0024. Pragmatic Performance over Micro-Optimizations
+# 0021. Pragmatic Performance over Micro-Optimizations
 
 ## Status
 Accepted

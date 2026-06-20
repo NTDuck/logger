@@ -1,4 +1,4 @@
-# 0011. Dedicated Edge Receiver Service
+# 0010. Dedicated Edge Receiver Service
 
 ## Status
 Accepted

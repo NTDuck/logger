@@ -1,4 +1,4 @@
-# 0018. Append-Only Configuration Stream
+# 0015. Append-Only Configuration Stream
 
 ## Status
 Accepted

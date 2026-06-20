@@ -1,4 +1,4 @@
-# 0009. Sidecar Table for AI Metadata
+# 0008. Sidecar Table for AI Metadata
 
 ## Status
 Accepted

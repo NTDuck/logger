@@ -13,7 +13,7 @@ All domain and use-case modules must replace native types with the corresponding
 | **Timestamp** | `::chrono::DateTime<::chrono::Utc>` | `::axiom::time::Timestamp` |
 | **Interval** | `::chrono::Duration` | `::axiom::time::Interval` |
 
-Standard `String` is preferred for general domain entities to prevent lifetime contagion, reserving `Cow` specifically for zero-copy hot paths (ADR-0024).
+Standard `String` is preferred for general domain entities to prevent lifetime contagion, reserving `Cow` specifically for zero-copy hot paths (ADR-0021).
 
 ---
 
