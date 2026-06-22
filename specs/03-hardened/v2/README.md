@@ -1,6 +1,6 @@
 # Feature Specification: Log Collection and Application Error Monitoring System (Hardened Design v2)
 
-**Feature Branch**: `v2-hardened`
+**Feature Branch**: `03-hardened-v2`
 
 **Created**: 2026-06-22
 

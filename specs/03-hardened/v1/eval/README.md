@@ -1,7 +1,7 @@
 # Council Validation Audit Report (Round 2)
 
 **Status**: ❌ **REJECTED**
-**Artifact**: `specs/03-hardened/03-hardened.md`
+**Artifact**: `specs/03-hardened/v1/README.md`
 
 ## 1. Skeptic Architect Findings
 - **Result**: PASS (100% clean approval)
