@@ -6,7 +6,7 @@ use bon::Builder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Builder, Clone)]
+#[derive(Debug, Serialize, Deserialize, Builder, Clone)]
 pub struct DomainLog {
     #[builder(default = Uuid::now_v7())]
     pub log_id: Uuid,
