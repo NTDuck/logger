@@ -47,3 +47,7 @@ harness = false
 [[test]]
 name = "normalization_worker"
 harness = false
+
+[[test]]
+name = "db_writer"
+harness = false
