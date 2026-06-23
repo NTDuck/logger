@@ -42,6 +42,7 @@ pub async fn run_fetcher_task(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_processor_task(
     mut rx: mpsc::Receiver<NormalizedLog>,
     rate_limiter: Arc<dyn RateLimiter>,

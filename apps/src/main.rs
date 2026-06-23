@@ -21,6 +21,18 @@ struct Args {
 
     #[arg(long, env = "CLICKHOUSE_URL", default_value = "http://localhost:8123")]
     clickhouse_url: String,
+
+    #[arg(long, env = "REDIS_URL", default_value = "redis://localhost:6379/")]
+    redis_url: String,
+
+    #[arg(long, env = "TELEGRAM_TOKEN", default_value = "")]
+    telegram_token: String,
+
+    #[arg(long, env = "TELEGRAM_CHAT_ID", default_value = "")]
+    telegram_chat_id: String,
+
+    #[arg(long, env = "ADMIN_API_URL", default_value = "http://localhost:8081")]
+    admin_api_url: String,
 }
 
 #[tokio::main]
@@ -236,6 +248,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cancel_token.clone(),
         )
         .await;
+    } else if args.role == "alert-consumer" {
+        use logger::alert_consumer::adapters::{HttpConfigSubscriber, RedisRateLimiter, TelegramNotifier};
+        use logger::alert_consumer::config_loop::run_config_listener_task;
+        use logger::alert_consumer::run_loop::{run_fetcher_task, run_processor_task};
+        use prometheus::IntCounter;
+        use rdkafka::consumer::{Consumer, StreamConsumer};
+        use std::sync::Arc;
+        use tokio::sync::RwLock;
+
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("bootstrap.servers", &args.kafka_brokers)
+            .set("group.id", "alert-consumer-group")
+            .set("enable.auto.commit", "false")
+            .create()?;
+        consumer.subscribe(&["alerts-priority-stream"])?;
+        let consumer = Arc::new(consumer);
+
+        let rate_limiter = Arc::new(RedisRateLimiter::new(&args.redis_url)?);
+        let notifier = Arc::new(TelegramNotifier::new(args.telegram_token, args.telegram_chat_id));
+        let config_subscriber = Arc::new(HttpConfigSubscriber::new(args.admin_api_url, &args.redis_url)?);
+
+        let config_cache = Arc::new(RwLock::new(None));
+
+        let registry = Registry::new();
+        let events_processed_total = IntCounterVec::new(
+            prometheus::Opts::new("logger_events_processed_total", "Events processed"),
+            &["stage", "status"],
+        )?;
+        let alerts_fired_total = IntCounter::new("logger_alerts_fired_total", "Alerts Fired")?;
+        let config_reconciliations_total = IntCounter::new("logger_config_reconciliations_total", "Config reloads")?;
+
+        registry.register(Box::new(events_processed_total.clone()))?;
+        registry.register(Box::new(alerts_fired_total.clone()))?;
+        registry.register(Box::new(config_reconciliations_total.clone()))?;
+
+        let config_token = cancel_token.clone();
+        let config_cache_clone = config_cache.clone();
+        let config_task = tokio::spawn(async move {
+            run_config_listener_task(config_subscriber, config_cache_clone, config_token, config_reconciliations_total).await;
+        });
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+        let fetcher_token = cancel_token.clone();
+        let fetcher_consumer = consumer.clone();
+        let fetcher_task = tokio::spawn(async move {
+            run_fetcher_task(fetcher_consumer, tx, fetcher_token).await;
+        });
+
+        let processor_token = cancel_token.clone();
+        let processor_task = tokio::spawn(async move {
+            run_processor_task(
+                rx,
+                rate_limiter,
+                notifier,
+                config_cache,
+                consumer,
+                events_processed_total,
+                alerts_fired_total,
+                processor_token,
+            ).await;
+        });
+
+        let _ = tokio::join!(config_task, fetcher_task, processor_task);
     }
 
     Ok(())
