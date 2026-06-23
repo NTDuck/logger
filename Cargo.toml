@@ -1,0 +1,21 @@
+[package]
+name = "logger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+cucumber = { version = "0.21", features = ["libtest"] }
+tokio = { version = "1.37.0", features = ["full", "test-util"] }
+
+[lib]
+path = "apps/src/lib.rs"
+
+[[bin]]
+name = "logger"
+path = "apps/src/main.rs"
+
+[[test]]
+name = "edge_receiver"
+harness = false
