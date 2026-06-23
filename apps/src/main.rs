@@ -194,6 +194,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ::tracing::error!("A db-writer task exited unexpectedly");
             cancel_token.cancel();
         }
+    } else if args.role == "ai-consumer" {
+        use logger::ai_consumer::actors::run_classification_loop;
+        use logger::ai_consumer::adapters::{KafkaTagPublisher, OnnxClassifier};
+        use rdkafka::consumer::{Consumer, StreamConsumer};
+
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("bootstrap.servers", &args.kafka_brokers)
+            .set("group.id", "ai-consumer-group")
+            .set("enable.auto.commit", "false")
+            .create()?;
+        consumer.subscribe(&["logs-normalized"])?;
+        let consumer = Arc::new(consumer);
+
+        // Dummy session creation to satisfy ort.
+        // In reality, this requires a valid .onnx file path
+        let session = ort::session::Session::builder()?.commit_from_memory(&[])?;
+        let classifier = Arc::new(OnnxClassifier::new(session, "v1.0".to_string()));
+
+        let producer: FutureProducer = ClientConfig::new()
+            .set("bootstrap.servers", &args.kafka_brokers)
+            .set("message.timeout.ms", "5000")
+            .create()?;
+        let publisher = Arc::new(KafkaTagPublisher::new(producer, "ai-tags-stream".to_string()));
+
+        let registry = Registry::new();
+        let events_processed_total = IntCounterVec::new(
+            prometheus::Opts::new("logger_events_processed_total", "Events processed"),
+            &["stage", "status"],
+        )?;
+        registry.register(Box::new(events_processed_total.clone()))?;
+
+        run_classification_loop(
+            consumer,
+            classifier,
+            publisher,
+            events_processed_total,
+            cancel_token.clone(),
+        ).await;
     }
 
     Ok(())
