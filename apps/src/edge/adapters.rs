@@ -1,7 +1,13 @@
 use crate::edge::models::{DomainLog, EdgeError};
+use async_trait::async_trait;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::util::Timeout;
 use tap::TapFallible;
+
+#[async_trait]
+pub trait LogProducer: Send + Sync {
+    async fn produce(&self, domain_log: &DomainLog) -> Result<(), EdgeError>;
+}
 
 pub struct KafkaLogProducer {
     producer: FutureProducer,
@@ -11,9 +17,12 @@ impl KafkaLogProducer {
     pub fn new(producer: FutureProducer) -> Self {
         Self { producer }
     }
+}
 
+#[async_trait]
+impl LogProducer for KafkaLogProducer {
     #[::tracing::instrument(skip_all)]
-    pub async fn produce(&self, domain_log: &DomainLog) -> Result<(), EdgeError> {
+    async fn produce(&self, domain_log: &DomainLog) -> Result<(), EdgeError> {
         let payload = serde_json::to_vec(domain_log)
             .map_err(|e| EdgeError::KafkaProduceError(e.to_string()))?;
 

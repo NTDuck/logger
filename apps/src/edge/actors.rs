@@ -1,4 +1,4 @@
-use crate::edge::adapters::KafkaLogProducer;
+use crate::edge::adapters::LogProducer;
 use crate::edge::logic::{check_app_grant, parse_and_validate_log, validate_jwt};
 use crate::edge::models::EdgeError;
 use axum::extract::{Request, State};
@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub producer: Arc<KafkaLogProducer>,
+    pub producer: Arc<dyn LogProducer>,
     pub jwt_public_key: Arc<Vec<u8>>,
     pub ingest_bytes_total: Counter,
     pub events_processed_total: IntCounterVec,
@@ -46,8 +46,13 @@ pub async fn ingest_logs(
     .await
     .tap_err(|e| ::tracing::error!(error = %e, "Timeout reading body stream"))
     .map_err(|_| EdgeError::BadRequest("Timeout".into()))?
-    .tap_err(|e| ::tracing::error!(error = %e, "Failed extracting body bytes"))
-    .map_err(|_| EdgeError::BadRequest("Failed to read body".into()))?;
+    .map_err(|e| {
+        if e.to_string().contains("limit") {
+            EdgeError::PayloadTooLarge
+        } else {
+            EdgeError::BadRequest("Failed to read body".into())
+        }
+    })?;
 
     // 2. Telemetry: Byte counting unconditionally after socket extraction
     state.ingest_bytes_total.inc_by(body_bytes.len() as f64);
