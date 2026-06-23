@@ -1,3 +1,4 @@
+pub mod admin_steps;
 pub mod ai_consumer_steps;
 pub mod alert_consumer_steps;
 pub mod db_writer_steps;

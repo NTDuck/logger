@@ -67,3 +67,7 @@ harness = false
 [[test]]
 name = "websocket_server"
 harness = false
+
+[[test]]
+name = "admin_api"
+harness = false
