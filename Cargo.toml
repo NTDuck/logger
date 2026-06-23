@@ -57,3 +57,7 @@ harness = false
 [[test]]
 name = "ai_consumer"
 harness = false
+
+[[test]]
+name = "alert_consumer"
+harness = false

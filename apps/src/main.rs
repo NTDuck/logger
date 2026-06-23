@@ -216,7 +216,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .set("bootstrap.servers", &args.kafka_brokers)
             .set("message.timeout.ms", "5000")
             .create()?;
-        let publisher = Arc::new(KafkaTagPublisher::new(producer, "ai-tags-stream".to_string()));
+        let publisher = Arc::new(KafkaTagPublisher::new(
+            producer,
+            "ai-tags-stream".to_string(),
+        ));
 
         let registry = Registry::new();
         let events_processed_total = IntCounterVec::new(
@@ -231,7 +234,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             publisher,
             events_processed_total,
             cancel_token.clone(),
-        ).await;
+        )
+        .await;
     }
 
     Ok(())
