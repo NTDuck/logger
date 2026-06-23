@@ -451,6 +451,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .await
             .tap_err(|e| ::tracing::error!(error = %e, "Admin API server failed to start"))?;
+    } else if args.role == "ai-tag-projection" {
+        use logger::ai_tag_db::actors::{run_tag_fetcher_task, run_tag_processor_task};
+        use logger::ai_tag_db::adapters::ClickHouseAITagWriter;
+        use prometheus::{IntCounterVec, Opts};
+        use rdkafka::{
+            config::ClientConfig,
+            consumer::{Consumer, StreamConsumer},
+        };
+        use std::sync::Arc;
+        use tap::TapFallible;
+        use tokio::sync::mpsc;
+
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("group.id", "ai-tag-db-projection-group")
+            .set("bootstrap.servers", args.kafka_brokers.as_str())
+            .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "earliest")
+            .create()
+            .tap_err(|e| ::tracing::error!(error = %e, "Failed to create Kafka consumer"))?;
+
+        consumer
+            .subscribe(&["ai-tags-stream"])
+            .tap_err(|e| ::tracing::error!(error = %e, "Failed to subscribe to topic"))?;
+
+        let consumer = Arc::new(consumer);
+
+        let req_client = reqwest::Client::new();
+        let writer = Arc::new(ClickHouseAITagWriter {
+            client: req_client,
+            url: args.clickhouse_url,
+        });
+
+        let events_processed_total = IntCounterVec::new(
+            Opts::new("logger_events_processed_total", "Total events processed"),
+            &["stage", "status"],
+        )?;
+        let registry = Registry::new();
+        registry.register(Box::new(events_processed_total.clone()))?;
+
+        let (tx, rx) = mpsc::channel(1000);
+
+        let fetcher_cancel = cancel_token.clone();
+        let processor_cancel = cancel_token.clone();
+        let processor_writer = writer.clone();
+
+        let consumer_clone = consumer.clone();
+        let fetcher_handle = tokio::spawn(async move {
+            run_tag_fetcher_task(consumer_clone, tx, fetcher_cancel).await;
+        });
+
+        let processor_handle = tokio::spawn(async move {
+            run_tag_processor_task(
+                rx,
+                processor_writer,
+                events_processed_total,
+                processor_cancel,
+            )
+            .await;
+        });
+
+        let _ = tokio::join!(fetcher_handle, processor_handle);
     }
 
     Ok(())

@@ -1,10 +1,7 @@
 use crate::ai_tag_db::logic::AITagBatchAccumulator;
 use crate::ai_tag_db::models::{AITagClickHouseWriter, AITagMessage};
 use prometheus::IntCounterVec;
-use rdkafka::{
-    consumer::StreamConsumer,
-    Message as KafkaMessage,
-};
+use rdkafka::{consumer::StreamConsumer, Message as KafkaMessage};
 use std::sync::Arc;
 use std::time::Duration;
 use tap::TapFallible;
