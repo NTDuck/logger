@@ -71,3 +71,7 @@ harness = false
 [[test]]
 name = "admin_api"
 harness = false
+
+[[test]]
+name = "ai_tag_db_projection"
+harness = false
