@@ -61,8 +61,9 @@ To reliably build the project, use the provided `docker-compose.yml` environment
 
 ```bash
 # Start the entire monolith and all databases
-docker compose up --build
+sudo docker compose up --build
 ```
+*(Note: If you encounter a `permission denied` error for `docker.sock`, ensure you prefix the command with `sudo` or add your user to the `docker` group.)*
 
 For local development without Docker, use the provided `nix-shell` environment. It ensures that system dependencies like `librdkafka` and `openssl` are present.
 
