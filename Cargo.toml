@@ -13,7 +13,7 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 futures-util = "0.3.32"
 http = "1.4.2"
 jsonwebtoken = { version = "10.4.0", features = ["default", "rust_crypto"] }
-ort = "2.0.0-rc.9"
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24"] }
 prometheus = "0.14.0"
 rdkafka = { version = "0.39.0", features = ["libz", "tokio"], default-features = false }
 redis = { version = "0.25.3", features = ["tokio-comp"] }
