@@ -4,13 +4,22 @@ use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::{Message, OwnedMessage};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::util::Timeout;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tap::TapFallible;
+
+macro_rules! try_local {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => return ::axiom::err!(e),
+        }
+    };
+}
 
 #[async_trait]
 pub trait LogConsumer: Send + Sync {
-    async fn consume(&self) -> Result<(Vec<u8>, OwnedMessage), NormalizationError>;
-    fn commit_offset(&self, message: &OwnedMessage) -> Result<(), NormalizationError>;
+    async fn consume(&self) -> ::axiom::result::Fallible<::core::result::Result<(Vec<u8>, OwnedMessage), ::std::vec::Vec<NormalizationError>>>;
+    fn commit_offset(&self, message: &OwnedMessage) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>>;
 }
 
 pub struct KafkaLogConsumer {
@@ -26,7 +35,7 @@ impl KafkaLogConsumer {
 #[async_trait]
 impl LogConsumer for KafkaLogConsumer {
     #[::tracing::instrument(skip_all)]
-    async fn consume(&self) -> Result<(Vec<u8>, OwnedMessage), NormalizationError> {
+    async fn consume(&self) -> ::axiom::result::Fallible<::core::result::Result<(Vec<u8>, OwnedMessage), ::std::vec::Vec<NormalizationError>>> {
         let msg = self
             .consumer
             .recv()
@@ -37,11 +46,11 @@ impl LogConsumer for KafkaLogConsumer {
         let payload = msg.payload().unwrap_or_default().to_vec();
         ::tracing::debug!(bytes = payload.len(), "consumed raw message from logs-raw");
 
-        Ok((payload, msg.detach()))
+        ::axiom::ok!((payload, msg.detach()))
     }
 
     #[::tracing::instrument(skip_all)]
-    fn commit_offset(&self, message: &OwnedMessage) -> Result<(), NormalizationError> {
+    fn commit_offset(&self, message: &OwnedMessage) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>> {
         let mut tpl = rdkafka::TopicPartitionList::new();
         tpl.add_partition_offset(
             message.topic(),
@@ -56,15 +65,15 @@ impl LogConsumer for KafkaLogConsumer {
             .map_err(|e| NormalizationError::ProduceError(e.to_string()))?;
 
         ::tracing::debug!("offset committed for logs-raw message");
-        Ok(())
+        ::axiom::ok!(())
     }
 }
 
 #[async_trait]
 pub trait NormalizedProducer: Send + Sync {
-    async fn produce_normalized(&self, log: &NormalizedLog) -> Result<(), NormalizationError>;
-    async fn produce_alert(&self, log: &NormalizedLog) -> Result<(), NormalizationError>;
-    async fn produce_dlq(&self, envelope: &DLQEnvelope) -> Result<(), NormalizationError>;
+    async fn produce_normalized(&self, log: &NormalizedLog) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>>;
+    async fn produce_alert(&self, log: &NormalizedLog) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>>;
+    async fn produce_dlq(&self, envelope: &DLQEnvelope) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>>;
 }
 
 pub struct KafkaNormalizedProducer {
@@ -80,7 +89,7 @@ impl KafkaNormalizedProducer {
 #[async_trait]
 impl NormalizedProducer for KafkaNormalizedProducer {
     #[::tracing::instrument(skip_all)]
-    async fn produce_normalized(&self, log: &NormalizedLog) -> Result<(), NormalizationError> {
+    async fn produce_normalized(&self, log: &NormalizedLog) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>> {
         let payload = serde_json::to_vec(log)
             .tap_err(|e| ::tracing::error!(error = %e, "serialization failed for NormalizedLog"))
             .map_err(|e| NormalizationError::SerializationError(e.to_string()))?;
@@ -100,11 +109,11 @@ impl NormalizedProducer for KafkaNormalizedProducer {
             .map_err(|e| NormalizationError::ProduceError(e.to_string()))?;
 
         ::tracing::debug!(topic = "logs-normalized", log_id = %log.log_id, "produced normalized log");
-        Ok(())
+        ::axiom::ok!(())
     }
 
     #[::tracing::instrument(skip_all)]
-    async fn produce_alert(&self, log: &NormalizedLog) -> Result<(), NormalizationError> {
+    async fn produce_alert(&self, log: &NormalizedLog) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>> {
         let payload = serde_json::to_vec(log)
             .tap_err(
                 |e| ::tracing::error!(error = %e, "serialization failed for alert NormalizedLog"),
@@ -126,11 +135,11 @@ impl NormalizedProducer for KafkaNormalizedProducer {
             .map_err(|e| NormalizationError::ProduceError(e.to_string()))?;
 
         ::tracing::debug!(topic = "alerts-priority-stream", log_id = %log.log_id, "produced alert duplicate");
-        Ok(())
+        ::axiom::ok!(())
     }
 
     #[::tracing::instrument(skip_all)]
-    async fn produce_dlq(&self, envelope: &DLQEnvelope) -> Result<(), NormalizationError> {
+    async fn produce_dlq(&self, envelope: &DLQEnvelope) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<NormalizationError>>> {
         let payload = serde_json::to_vec(envelope)
             .tap_err(|e| ::tracing::error!(error = %e, "serialization failed for DLQEnvelope"))
             .map_err(|e| NormalizationError::SerializationError(e.to_string()))?;
@@ -148,6 +157,6 @@ impl NormalizedProducer for KafkaNormalizedProducer {
             .map_err(|e| NormalizationError::ProduceError(e.to_string()))?;
 
         ::tracing::debug!(topic = "logs-dlq", sha256 = %envelope.sha256_hash, "produced DLQ envelope");
-        Ok(())
+        ::axiom::ok!(())
     }
 }

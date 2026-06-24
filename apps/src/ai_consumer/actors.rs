@@ -4,7 +4,7 @@ use crate::normalization::models::NormalizedLog;
 use prometheus::IntCounterVec;
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::Message;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
@@ -62,7 +62,7 @@ pub async fn run_classification_loop(
             }
 
             let mut success_count = 0;
-            let mut highest_offsets = std::collections::HashMap::new();
+            let mut highest_offsets = ::std::collections::HashMap::new();
 
             for msg in &buffer {
                 highest_offsets.insert(msg.partition(), msg.offset());
@@ -83,9 +83,14 @@ pub async fn run_classification_loop(
 
                 let body = extract_message_body(&log);
                 let tag = match classifier.classify(log.log_id, &body).await {
-                    Ok(t) => t,
-                    Err(e) => {
-                        error!(error = ?e, "Inference error");
+                    Ok(Ok(t)) => t,
+                    Ok(Err(errs)) => {
+                        error!(error = ?errs, "Inference error (business)");
+                        metrics.with_label_values(&["ai_consumer", "error"]).inc();
+                        continue;
+                    }
+                    Err(sys_err) => {
+                        error!(error = %sys_err, "Inference error (system)");
                         metrics.with_label_values(&["ai_consumer", "error"]).inc();
                         continue;
                     }
@@ -99,14 +104,23 @@ pub async fn run_classification_loop(
                         }
                         res = publisher.publish_patch(&tag) => {
                             match res {
-                                Ok(_) => {
+                                Ok(Ok(_)) => {
                                     success_count += 1;
                                     break;
                                 }
-                                Err(e) => {
-                                    error!(error = ?e, "Failed to publish tag, retrying");
+                                Ok(Err(errs)) => {
+                                    error!(error = ?errs, "Failed to publish tag (business error), retrying");
                                     let sleep_duration = tokio::time::Duration::from_secs(backoff);
-                                    backoff = std::cmp::min(backoff * 2, 60);
+                                    backoff = ::std::cmp::min(backoff * 2, 60);
+                                    tokio::select! {
+                                        _ = processor_token.cancelled() => { return; }
+                                        _ = tokio::time::sleep(sleep_duration) => {}
+                                    }
+                                }
+                                Err(sys_err) => {
+                                    error!(error = %sys_err, "Failed to publish tag (system error), retrying");
+                                    let sleep_duration = tokio::time::Duration::from_secs(backoff);
+                                    backoff = ::std::cmp::min(backoff * 2, 60);
                                     tokio::select! {
                                         _ = processor_token.cancelled() => { return; }
                                         _ = tokio::time::sleep(sleep_duration) => {}

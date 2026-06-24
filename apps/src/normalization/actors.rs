@@ -4,7 +4,7 @@ use crate::normalization::logic::{flatten_to_parallel_arrays, is_poison_pill, re
 use crate::normalization::models::{DLQEnvelope, NormalizedLog};
 use prometheus::{IntCounter, IntCounterVec};
 use rdkafka::message::OwnedMessage;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
@@ -22,10 +22,13 @@ pub async fn run_fetcher_task(
             }
             res = consumer.consume() => {
                 match res {
-                    Ok(msg) => {
+                    Ok(Ok(msg)) => {
                         if sender.send(msg).await.is_err() {
                             break;
                         }
+                    }
+                    Ok(Err(_)) => {
+                        continue;
                     }
                     Err(_) => {
                         continue;
@@ -75,10 +78,10 @@ pub async fn run_processor_task(
                             _ = cancel_token.cancelled() => return,
                             res = producer.produce_dlq(&envelope) => {
                                 match res {
-                                    Ok(_) => break,
-                                    Err(_) => {
+                                    Ok(Ok(_)) => break,
+                                    Ok(Err(_)) | Err(_) => {
                                         attempt += 1;
-                                        let delay = std::cmp::min(100 * (2u64.pow(attempt)), 5000);
+                                        let delay = ::std::cmp::min(100 * (2u64.pow(attempt)), 5000);
                                         tokio::select! {
                                             _ = cancel_token.cancelled() => return,
                                             _ = sleep(Duration::from_millis(delay)) => continue,
@@ -115,7 +118,7 @@ pub async fn run_processor_task(
                                         Ok(_) => break,
                                         Err(_) => {
                                             attempt += 1;
-                                            let delay = std::cmp::min(100 * (2u64.pow(attempt)), 5000);
+                                            let delay = ::std::cmp::min(100 * (2u64.pow(attempt)), 5000);
                                             tokio::select! {
                                                 _ = cancel_token.cancelled() => return,
                                                 _ = sleep(Duration::from_millis(delay)) => continue,
@@ -168,7 +171,7 @@ pub async fn run_processor_task(
                                 Ok(_) => break,
                                 Err(_) => {
                                     attempt += 1;
-                                    let delay = std::cmp::min(100 * (2u64.pow(attempt)), 5000);
+                                    let delay = ::std::cmp::min(100 * (2u64.pow(attempt)), 5000);
                                     tokio::select! {
                                         _ = cancel_token.cancelled() => return,
                                         _ = sleep(Duration::from_millis(delay)) => continue,
@@ -187,10 +190,10 @@ pub async fn run_processor_task(
                             _ = cancel_token.cancelled() => return,
                             res = producer.produce_alert(&normalized_log) => {
                                 match res {
-                                    Ok(_) => break,
-                                    Err(_) => {
+                                    Ok(Ok(_)) => break,
+                                    Ok(Err(_)) | Err(_) => {
                                         attempt += 1;
-                                        let delay = std::cmp::min(100 * (2u64.pow(attempt)), 5000);
+                                        let delay = ::std::cmp::min(100 * (2u64.pow(attempt)), 5000);
                                         tokio::select! {
                                             _ = cancel_token.cancelled() => return,
                                             _ = sleep(Duration::from_millis(delay)) => continue,

@@ -1,14 +1,16 @@
-use crate::edge::models::axiom::Erratum;
+use axiom::Erratum;
+use thiserror::Error;
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use ::serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(::core::fmt::Debug, ::serde::Deserialize)]
 pub struct AdminConfigPayload {
     pub threshold: u64,
     pub window_seconds: u64,
 }
 
-#[derive(Debug, Clone, Builder, Serialize)]
+#[derive(::core::fmt::Debug, ::core::clone::Clone, ::bon::Builder, ::serde::Serialize)]
+#[builder(on(::axiom::string::String, into))]
 pub struct AlertConfig {
     pub config_id: String,
     pub threshold: u64,
@@ -16,7 +18,7 @@ pub struct AlertConfig {
     pub created_at: String,
 }
 
-#[derive(Debug, Erratum)]
+#[derive(::core::fmt::Debug, ::axiom::Erratum, ::thiserror::Error)]
 pub enum AdminError {
     #[error("Unauthorized")]
     Unauthorized,
@@ -33,6 +35,12 @@ pub enum AdminError {
 
 #[async_trait::async_trait]
 pub trait ConfigWriter: Send + Sync {
-    async fn append_config(&self, config: AlertConfig) -> Result<(), AdminError>;
-    async fn publish_update_event(&self, config: AlertConfig) -> Result<(), AdminError>;
+    async fn append_config(
+        &self,
+        config: AlertConfig,
+    ) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AdminError>>>;
+    async fn publish_update_event(
+        &self,
+        config: AlertConfig,
+    ) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AdminError>>>;
 }

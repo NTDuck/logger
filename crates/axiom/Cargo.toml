@@ -1,0 +1,12 @@
+[package]
+name = "axiom"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axiom-derive = { path = "../axiom-derive" }
+anyhow = "1.0.95"
+bytes = "1.12.0"
+chrono = "0.4.45"
+regex = "1.12.4"
+once_cell = "1.20.3"

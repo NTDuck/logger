@@ -3,7 +3,7 @@ use crate::alert_consumer::models::{AlertConfig, AlertNotifier, RateLimiter};
 use crate::normalization::models::NormalizedLog;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::Message;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -82,7 +82,7 @@ pub async fn run_processor_task(
                 let strict_ttl = config.window_seconds + 10;
 
                 match rate_limiter.reserve_and_check(&fingerprint, config.window_seconds, config.threshold, strict_ttl).await {
-                    Ok(true) => {
+                    Ok(Ok(true)) => {
                         let text = format_notification(&log.app_name, &log.message, &log.timestamp);
                         let mut success = false;
 
@@ -90,16 +90,25 @@ pub async fn run_processor_task(
                         let mut backoff = 1;
                         loop {
                             match notifier.notify(&text).await {
-                                Ok(_) => {
+                                Ok(Ok(_)) => {
                                     success = true;
                                     break;
                                 }
-                                Err(e) => {
-                                    ::tracing::error!(error = ?e, "Failed to send notification. Retrying...");
+                                Ok(Err(errs)) => {
+                                    ::tracing::error!(errors = ?errs, "Domain error sending notification. Retrying...");
                                     tokio::select! {
                                         _ = cancel_token.cancelled() => break,
-                                        _ = tokio::time::sleep(std::time::Duration::from_secs(backoff)) => {
-                                            backoff = std::cmp::min(backoff * 2, 60);
+                                        _ = tokio::time::sleep(::std::time::Duration::from_secs(backoff)) => {
+                                            backoff = ::std::cmp::min(backoff * 2, 60);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    ::tracing::error!(error = ?e, "System error sending notification. Retrying...");
+                                    tokio::select! {
+                                        _ = cancel_token.cancelled() => break,
+                                        _ = tokio::time::sleep(::std::time::Duration::from_secs(backoff)) => {
+                                            backoff = ::std::cmp::min(backoff * 2, 60);
                                         }
                                     }
                                 }
@@ -107,8 +116,10 @@ pub async fn run_processor_task(
                         }
 
                         if success {
-                            if let Err(e) = rate_limiter.commit(&fingerprint).await {
-                                ::tracing::error!(error = ?e, "Failed to commit token");
+                            match rate_limiter.commit(&fingerprint).await {
+                                Ok(Err(errs)) => ::tracing::error!(errors = ?errs, "Domain error committing token"),
+                                Err(e) => ::tracing::error!(error = ?e, "System error committing token"),
+                                _ => {}
                             }
                             alerts_fired_total.inc();
                             events_processed_total.with_label_values(&["alert", "success"]).inc();
@@ -116,13 +127,15 @@ pub async fn run_processor_task(
                             // In real prod, we would collect the offsets from the Fetcher to commit.
                             // Assuming auto.commit is enabled or we don't manually commit per message for now.
                         } else {
-                            if let Err(e) = rate_limiter.rollback(&fingerprint).await {
-                                ::tracing::error!(error = ?e, "Failed to rollback token");
+                            match rate_limiter.rollback(&fingerprint).await {
+                                Ok(Err(errs)) => ::tracing::error!(errors = ?errs, "Domain error rolling back token"),
+                                Err(e) => ::tracing::error!(error = ?e, "System error rolling back token"),
+                                _ => {}
                             }
                             events_processed_total.with_label_values(&["alert", "error"]).inc();
                         }
                     }
-                    Ok(false) => {
+                    Ok(Ok(false)) => {
                         // Batching fallback
                         let digest_text = format_digest(&log.app_name, &fingerprint, config.threshold, config.window_seconds);
                         // Assuming digest is pushed to some background queue or same notifier
@@ -130,8 +143,12 @@ pub async fn run_processor_task(
                         let _ = notifier.notify(&digest_text).await;
                         events_processed_total.with_label_values(&["alert", "success"]).inc();
                     }
+                    Ok(Err(errs)) => {
+                        ::tracing::error!(errors = ?errs, "Rate limiter domain error");
+                        events_processed_total.with_label_values(&["alert", "error"]).inc();
+                    }
                     Err(e) => {
-                        ::tracing::error!(error = ?e, "Rate limiter error");
+                        ::tracing::error!(error = ?e, "Rate limiter system error");
                         events_processed_total.with_label_values(&["alert", "error"]).inc();
                     }
                 }

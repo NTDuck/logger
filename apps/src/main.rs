@@ -1,14 +1,14 @@
+use ::std::sync::Arc;
 use clap::Parser;
 use logger::edge::actors::{ingest_logs, AppState};
 use logger::edge::adapters::KafkaLogProducer;
 use prometheus::{Counter, IntCounterVec, Registry};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, ::core::fmt::Debug)]
 struct Args {
     #[arg(long)]
     role: String,
@@ -36,7 +36,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
@@ -157,8 +157,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let consumer = Arc::new(consumer);
 
         let reqwest_client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(::std::time::Duration::from_secs(5))
+            .timeout(::std::time::Duration::from_secs(30))
             .build()?;
 
         let clickhouse_writer = ClickHouseHttpWriter::new(
@@ -246,6 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await;
     } else if args.role == "alert-consumer" {
+        use ::std::sync::Arc;
         use logger::alert_consumer::adapters::{
             HttpConfigSubscriber, RedisRateLimiter, TelegramNotifier,
         };
@@ -253,7 +254,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use logger::alert_consumer::run_loop::{run_fetcher_task, run_processor_task};
         use prometheus::IntCounter;
         use rdkafka::consumer::{Consumer, StreamConsumer};
-        use std::sync::Arc;
         use tokio::sync::RwLock;
 
         let consumer: StreamConsumer = ClientConfig::new()
@@ -264,15 +264,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         consumer.subscribe(&["alerts-priority-stream"])?;
         let consumer = Arc::new(consumer);
 
-        let rate_limiter = Arc::new(RedisRateLimiter::new(&args.redis_url)?);
+        let rate_limiter = Arc::new(match RedisRateLimiter::new(&args.redis_url)? {
+            Ok(v) => v,
+            Err(e) => return Err(anyhow::anyhow!("Failed to initialize rate limiter: {:?}", e)),
+        });
         let notifier = Arc::new(TelegramNotifier::new(
             args.telegram_token,
             args.telegram_chat_id,
         ));
-        let config_subscriber = Arc::new(HttpConfigSubscriber::new(
+        let config_subscriber = Arc::new(match HttpConfigSubscriber::new(
             args.admin_api_url,
             &args.redis_url,
-        )?);
+        )? {
+            Ok(v) => v,
+            Err(e) => return Err(anyhow::anyhow!("Failed to initialize config subscriber: {:?}", e)),
+        });
 
         let config_cache = Arc::new(RwLock::new(None));
 
@@ -326,13 +332,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let _ = tokio::join!(config_task, fetcher_task, processor_task);
     } else if args.role == "ws-server" {
+        use ::std::sync::Arc;
         use axum::{routing::get, Router};
         use jsonwebtoken::DecodingKey;
         use logger::ws::handler::{ws_upgrade_handler, AppState};
         use logger::ws::ingestion::ingestion_loop;
         use prometheus::{IntCounterVec, IntGauge};
         use rdkafka::consumer::{Consumer, StreamConsumer};
-        use std::sync::Arc;
         use tap::TapFallible;
         use tokio::net::TcpListener;
         use tokio::sync::broadcast;
@@ -395,12 +401,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .await?;
     } else if args.role == "admin-api" {
+        use ::std::sync::Arc;
         use axum::{routing::post, Router};
         use jsonwebtoken::DecodingKey;
         use logger::admin::actors::{admin_config_handler, AdminAppState};
         use logger::admin::adapters::AdminConfigWriter;
         use prometheus::{IntCounterVec, Opts};
-        use std::sync::Arc;
         use tap::TapFallible;
         use tokio::net::TcpListener;
         use tokio::sync::Mutex;
@@ -449,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .tap_err(|e| ::tracing::error!(error = %e, "Admin API server failed to start"))?;
     } else if args.role == "ai-tag-projection" {
+        use ::std::sync::Arc;
         use logger::ai_tag_db::actors::{run_tag_fetcher_task, run_tag_processor_task};
         use logger::ai_tag_db::adapters::ClickHouseAITagWriter;
         use prometheus::{IntCounterVec, Opts};
@@ -456,7 +463,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config::ClientConfig,
             consumer::{Consumer, StreamConsumer},
         };
-        use std::sync::Arc;
         use tap::TapFallible;
         use tokio::sync::mpsc;
 

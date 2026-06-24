@@ -1,5 +1,5 @@
 use crate::normalization::models::NormalizedLog;
-use std::time::{Duration, Instant};
+use ::std::time::{Duration, Instant};
 
 pub struct BatchAccumulator {
     buffer: Vec<NormalizedLog>,
@@ -22,7 +22,7 @@ impl BatchAccumulator {
         self.buffer.push(log);
         if self.buffer.len() >= self.row_threshold {
             let mut batch = Vec::with_capacity(self.row_threshold);
-            std::mem::swap(&mut self.buffer, &mut batch);
+            ::std::mem::swap(&mut self.buffer, &mut batch);
             Some(batch)
         } else {
             None
@@ -32,7 +32,7 @@ impl BatchAccumulator {
     pub fn try_flush_by_timer(&mut self) -> Option<Vec<NormalizedLog>> {
         if !self.buffer.is_empty() && self.last_flush.elapsed() >= self.flush_interval {
             let mut batch = Vec::with_capacity(self.row_threshold);
-            std::mem::swap(&mut self.buffer, &mut batch);
+            ::std::mem::swap(&mut self.buffer, &mut batch);
             Some(batch)
         } else {
             None
@@ -42,7 +42,7 @@ impl BatchAccumulator {
     pub fn try_flush_all(&mut self) -> Option<Vec<NormalizedLog>> {
         if !self.buffer.is_empty() {
             let mut batch = Vec::with_capacity(self.row_threshold);
-            std::mem::swap(&mut self.buffer, &mut batch);
+            ::std::mem::swap(&mut self.buffer, &mut batch);
             Some(batch)
         } else {
             None

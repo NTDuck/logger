@@ -10,11 +10,11 @@ pub struct RedisRateLimiter {
 }
 
 impl RedisRateLimiter {
-    pub fn new(redis_url: &str) -> Result<Self, String> {
+    pub fn new(redis_url: &str) -> ::axiom::result::Fallible<::core::result::Result<Self, ::std::vec::Vec<String>>> {
         let client = redis::Client::open(redis_url)
             .tap_err(|e| ::tracing::error!(error = %e, "Failed to open Redis client"))
-            .map_err(|e| e.to_string())?;
-        Ok(Self { client })
+            .map_err(|e| ::anyhow::anyhow!(e))?;
+        ::axiom::ok!(Self { client })
     }
 }
 
@@ -26,13 +26,13 @@ impl RateLimiter for RedisRateLimiter {
         _window_sec: u64,
         limit: u64,
         strict_ttl: u64,
-    ) -> Result<bool, Vec<AlertError>> {
+    ) -> ::axiom::result::Fallible<::core::result::Result<bool, ::std::vec::Vec<AlertError>>> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to connect to Redis"))
-            .map_err(|e| vec![AlertError::RedisError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         // Lua script: increments the key, sets TTL if it's 1.
         // Returns the current count.
@@ -52,36 +52,36 @@ impl RateLimiter for RedisRateLimiter {
             .invoke_async(&mut conn)
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to execute Lua script"))
-            .map_err(|e| vec![AlertError::RedisError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         if count > limit {
-            Ok(false)
+            ::axiom::ok!(false)
         } else {
-            Ok(true)
+            ::axiom::ok!(true)
         }
     }
 
-    async fn commit(&self, _fingerprint: &str) -> Result<(), Vec<AlertError>> {
+    async fn commit(&self, _fingerprint: &str) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AlertError>>> {
         // In this implementation, the token is implicitly committed since we already INCR'd.
-        Ok(())
+        ::axiom::ok!(())
     }
 
-    async fn rollback(&self, fingerprint: &str) -> Result<(), Vec<AlertError>> {
+    async fn rollback(&self, fingerprint: &str) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AlertError>>> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to connect to Redis"))
-            .map_err(|e| vec![AlertError::RedisError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         // Decrement on rollback
         let _: () = conn
             .decr(fingerprint, 1)
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to DECR rollback"))
-            .map_err(|e| vec![AlertError::RedisError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
-        Ok(())
+        ::axiom::ok!(())
     }
 }
 
@@ -103,7 +103,7 @@ impl TelegramNotifier {
 
 #[async_trait]
 impl AlertNotifier for TelegramNotifier {
-    async fn notify(&self, message: &str) -> Result<(), Vec<AlertError>> {
+    async fn notify(&self, message: &str) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AlertError>>> {
         let url = format!("https://api.telegram.org/bot{}/sendMessage", self.bot_token);
 
         let req = serde_json::json!({
@@ -119,17 +119,17 @@ impl AlertNotifier for TelegramNotifier {
             .send()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Telegram HTTP request failed"))
-            .map_err(|e| vec![AlertError::TelegramError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         if !resp.status().is_success() {
             ::tracing::error!(status = ?resp.status(), "Telegram returned non-2xx");
-            return Err(vec![AlertError::TelegramError(format!(
+            return ::axiom::err!(AlertError::TelegramError(format!(
                 "HTTP Status {}",
                 resp.status()
-            ))]);
+            )));
         }
 
-        Ok(())
+        ::axiom::ok!(())
     }
 }
 
@@ -140,9 +140,9 @@ pub struct HttpConfigSubscriber {
 }
 
 impl HttpConfigSubscriber {
-    pub fn new(admin_api_url: String, redis_url: &str) -> Result<Self, String> {
-        let redis_client = redis::Client::open(redis_url).map_err(|e| e.to_string())?;
-        Ok(Self {
+    pub fn new(admin_api_url: String, redis_url: &str) -> ::axiom::result::Fallible<::core::result::Result<Self, ::std::vec::Vec<String>>> {
+        let redis_client = redis::Client::open(redis_url).map_err(|e| ::anyhow::anyhow!(e))?;
+        ::axiom::ok!(Self {
             client: reqwest::Client::new(),
             admin_api_url,
             redis_client,
@@ -152,7 +152,7 @@ impl HttpConfigSubscriber {
 
 #[async_trait]
 impl ConfigSubscriber for HttpConfigSubscriber {
-    async fn fetch_initial(&self) -> Result<AlertConfig, Vec<AlertError>> {
+    async fn fetch_initial(&self) -> ::axiom::result::Fallible<::core::result::Result<AlertConfig, ::std::vec::Vec<AlertError>>> {
         let url = format!("{}/api/v1/alert-config", self.admin_api_url);
         let resp = self
             .client
@@ -160,46 +160,46 @@ impl ConfigSubscriber for HttpConfigSubscriber {
             .send()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to fetch config from Admin API"))
-            .map_err(|e| vec![AlertError::ConfigSubscriptionError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         if !resp.status().is_success() {
             ::tracing::error!(status = ?resp.status(), "Admin API returned non-2xx");
             if resp.status() == reqwest::StatusCode::NOT_FOUND {
                 ::tracing::info!("Admin API config endpoint not found. Using default mock config.");
-                return Ok(AlertConfig {
+                return ::axiom::ok!(AlertConfig {
                     config_id: uuid::Uuid::nil(),
                     threshold: 100,
                     window_seconds: 60,
                     created_at: "1970-01-01T00:00:00Z".to_string(),
                 });
             }
-            return Err(vec![AlertError::ConfigSubscriptionError(format!(
+            return ::axiom::err!(AlertError::ConfigSubscriptionError(format!(
                 "HTTP Status {}",
                 resp.status()
-            ))]);
+            )));
         }
 
         let config: AlertConfig = resp
             .json()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to parse config JSON"))
-            .map_err(|e| vec![AlertError::ConfigSubscriptionError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
-        Ok(config)
+        ::axiom::ok!(config)
     }
 
-    async fn subscribe(&self) -> Result<tokio::sync::mpsc::Receiver<AlertConfig>, Vec<AlertError>> {
+    async fn subscribe(&self) -> ::axiom::result::Fallible<::core::result::Result<tokio::sync::mpsc::Receiver<AlertConfig>, ::std::vec::Vec<AlertError>>> {
         let mut conn = self
             .redis_client
             .get_async_pubsub()
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to connect to Redis for Pub/Sub"))
-            .map_err(|e| vec![AlertError::ConfigSubscriptionError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         conn.subscribe("alert-config-updates")
             .await
             .tap_err(|e| ::tracing::error!(error = ?e, "Failed to subscribe to Redis Pub/Sub"))
-            .map_err(|e| vec![AlertError::ConfigSubscriptionError(e.to_string())])?;
+            .map_err(|e| ::anyhow::anyhow!(e))?;
 
         let (tx, rx) = tokio::sync::mpsc::channel(10);
         let mut stream = conn.into_on_message();
@@ -222,6 +222,6 @@ impl ConfigSubscriber for HttpConfigSubscriber {
             }
         });
 
-        Ok(rx)
+        ::axiom::ok!(rx)
     }
 }

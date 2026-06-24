@@ -9,13 +9,13 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use jsonwebtoken::DecodingKey;
 use prometheus::{IntCounterVec, IntGauge};
-use serde::Deserialize;
-use std::sync::Arc;
+use ::serde::Deserialize;
+use ::std::sync::Arc;
 use tap::TapFallible;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Clone)]
+#[derive(::core::clone::Clone)]
 pub struct AppState {
     pub broadcast_tx: broadcast::Sender<BroadcastMessage>,
     pub decoding_key: Arc<DecodingKey>,
@@ -24,7 +24,7 @@ pub struct AppState {
     pub cancel_token: CancellationToken,
 }
 
-#[derive(Deserialize)]
+#[derive(::serde::Deserialize)]
 pub struct WsQuery {
     pub token: String,
 }
@@ -36,14 +36,21 @@ pub async fn ws_upgrade_handler(
     Query(query): Query<WsQuery>,
 ) -> Response {
     let config = match parse_ws_claims(&query.token, &state.decoding_key) {
-        Ok(c) => c,
-        Err(e) => {
-            let status = match e {
-                crate::ws::models::WSError::InvalidToken => axum::http::StatusCode::UNAUTHORIZED,
-                crate::ws::models::WSError::Forbidden => axum::http::StatusCode::FORBIDDEN,
-                _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            return (status, e.to_string()).into_response();
+        Ok(Ok(c)) => c,
+        Ok(Err(errs)) => {
+            if let Some(e) = errs.first() {
+                let status = match e {
+                    crate::ws::models::WSError::InvalidToken => axum::http::StatusCode::UNAUTHORIZED,
+                    crate::ws::models::WSError::Forbidden => axum::http::StatusCode::FORBIDDEN,
+                    _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                return (status, e.to_string()).into_response();
+            } else {
+                return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized".to_string()).into_response();
+            }
+        }
+        Err(sys_err) => {
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, sys_err.to_string()).into_response();
         }
     };
 

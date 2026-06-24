@@ -8,10 +8,10 @@ use axum::{
 };
 use jsonwebtoken::DecodingKey;
 use prometheus::IntCounterVec;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tap::TapFallible;
 
-#[derive(Clone)]
+#[derive(::core::clone::Clone)]
 pub struct AdminAppState {
     pub writer: Arc<dyn ConfigWriter>,
     pub events_processed_total: IntCounterVec,
@@ -31,49 +31,75 @@ pub async fn admin_config_handler(
         ""
     };
 
-    if validate_admin_claims(token, &state.decoding_key).is_err() {
-        state
-            .events_processed_total
-            .with_label_values(&["admin", "error"])
-            .inc();
-        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    match validate_admin_claims(token, &state.decoding_key) {
+        Ok(Ok(_)) => {}
+        Ok(Err(_)) => {
+            state
+                .events_processed_total
+                .with_label_values(&["admin", "error"])
+                .inc();
+            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+        }
+        Err(e) => {
+            ::tracing::error!(error = %e, "validate_admin_claims failed");
+            state
+                .events_processed_total
+                .with_label_values(&["admin", "error"])
+                .inc();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
     }
 
     let payload = match validate_payload(payload) {
-        Ok(p) => p,
-        Err(_) => {
+        Ok(Ok(p)) => p,
+        Ok(Err(_)) => {
             state
                 .events_processed_total
                 .with_label_values(&["admin", "error"])
                 .inc();
             return (StatusCode::BAD_REQUEST, "Invalid Payload").into_response();
         }
+        Err(e) => {
+            ::tracing::error!(error = %e, "validate_payload failed");
+            state
+                .events_processed_total
+                .with_label_values(&["admin", "error"])
+                .inc();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
     };
 
     let config = build_alert_config(payload);
 
-    if let Err(e) = state
-        .writer
-        .append_config(config.clone())
-        .await
-        .tap_err(|e| ::tracing::error!(error = %e, "Admin handler: append_config failed"))
-    {
-        state
-            .events_processed_total
-            .with_label_values(&["admin", "error"])
-            .inc();
-        return (StatusCode::BAD_GATEWAY, e.to_string()).into_response();
+    match state.writer.append_config(config.clone()).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(errs)) => {
+            ::tracing::error!(errors = ?errs, "Admin handler: append_config failed");
+            state
+                .events_processed_total
+                .with_label_values(&["admin", "error"])
+                .inc();
+            let msg = errs.first().map(|e| e.to_string()).unwrap_or_default();
+            return (StatusCode::BAD_GATEWAY, msg).into_response();
+        }
+        Err(e) => {
+            ::tracing::error!(error = %e, "Admin handler: append_config system error");
+            state
+                .events_processed_total
+                .with_label_values(&["admin", "error"])
+                .inc();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
     }
 
-    if state
-        .writer
-        .publish_update_event(config.clone())
-        .await
-        .tap_err(|e| ::tracing::error!(error = %e, "Admin handler: publish_update_event failed"))
-        .is_err()
-    {
-        // Redis publish failure does not block the response
-        ::tracing::warn!("Redis publish failed but ClickHouse write succeeded");
+    match state.writer.publish_update_event(config.clone()).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(errs)) => {
+            ::tracing::warn!(errors = ?errs, "Redis publish failed but ClickHouse write succeeded");
+        }
+        Err(e) => {
+            ::tracing::warn!(error = %e, "Redis publish system error but ClickHouse write succeeded");
+        }
     }
 
     state

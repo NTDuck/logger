@@ -3,10 +3,11 @@ pub mod axiom {
 }
 
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use ::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Builder, Clone)]
+#[derive(::core::fmt::Debug, ::serde::Serialize, ::serde::Deserialize, ::bon::Builder, ::core::clone::Clone)]
+#[builder(on(::axiom::string::String, into))]
 pub struct DomainLog {
     #[builder(default = Uuid::now_v7())]
     pub log_id: Uuid,
@@ -19,7 +20,7 @@ pub struct DomainLog {
     pub attribute_values_string: Vec<String>,
 }
 
-#[derive(Debug, axiom::Erratum)]
+#[derive(::core::fmt::Debug, ::axiom::Erratum, ::thiserror::Error)]
 pub enum EdgeError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
@@ -33,7 +34,7 @@ pub enum EdgeError {
     KafkaProduceError(String),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(::core::fmt::Debug, ::serde::Deserialize)]
 pub struct JwtClaims {
     pub sub: String,
     pub app_grants: Vec<String>,

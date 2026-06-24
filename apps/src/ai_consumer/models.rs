@@ -1,10 +1,12 @@
-use crate::edge::models::axiom::Erratum;
+use axiom::Erratum;
+use thiserror::Error;
 use async_trait::async_trait;
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use ::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Builder, PartialEq)]
+#[derive(::core::fmt::Debug, ::core::clone::Clone, ::serde::Serialize, ::serde::Deserialize, ::bon::Builder, PartialEq)]
+#[builder(on(::axiom::string::String, into))]
 pub struct AITag {
     pub log_id: Uuid,
     pub model_version: String,
@@ -13,7 +15,7 @@ pub struct AITag {
     pub tagged_at: String,
 }
 
-#[derive(Debug, Erratum)]
+#[derive(::core::fmt::Debug, ::axiom::Erratum, ::thiserror::Error)]
 pub enum AIError {
     #[error("InferenceError: {0}")]
     InferenceError(String),
@@ -25,10 +27,10 @@ pub enum AIError {
 
 #[async_trait]
 pub trait AIClassifier: Send + Sync {
-    async fn classify(&self, log_id: Uuid, message: &str) -> Result<AITag, AIError>;
+    async fn classify(&self, log_id: Uuid, message: &str) -> ::axiom::result::Fallible<::core::result::Result<AITag, ::std::vec::Vec<AIError>>>;
 }
 
 #[async_trait]
 pub trait TagStreamPublisher: Send + Sync {
-    async fn publish_patch(&self, tag: &AITag) -> Result<(), AIError>;
+    async fn publish_patch(&self, tag: &AITag) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AIError>>>;
 }

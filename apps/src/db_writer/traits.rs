@@ -4,5 +4,5 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait ClickHouseWriter: Send + Sync {
-    async fn write_batch(&self, batch: &[NormalizedLog]) -> Result<(), DbWriterError>;
+    async fn write_batch(&self, batch: &[NormalizedLog]) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<DbWriterError>>>;
 }

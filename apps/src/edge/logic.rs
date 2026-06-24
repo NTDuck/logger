@@ -3,7 +3,28 @@ use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use struson::reader::{JsonReader, JsonStreamReader, ValueType};
 use tap::TapFallible;
 
-pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
+
+macro_rules! try_local {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => return ::axiom::err!(e),
+        }
+    };
+}
+
+macro_rules! try_fallible {
+    ($e:expr) => {
+        match $e {
+            Ok(Ok(v)) => v,
+            Ok(Err(errs)) => return ::axiom::errs!(errs),
+            Err(e) => return Err(e.into()),
+        }
+    };
+}
+
+
+pub fn parse_and_validate_log(bytes: &[u8]) -> ::axiom::result::Fallible<::core::result::Result<DomainLog, ::std::vec::Vec<EdgeError>>> {
     let mut depth = 0;
     let mut in_string = false;
     let mut escape = false;
@@ -18,7 +39,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
             b'{' | b'[' if !in_string => {
                 depth += 1;
                 if depth > 5 {
-                    return Err(EdgeError::BadRequest("Nesting depth exceeds 5".to_string()));
+                    return ::axiom::err!(EdgeError::BadRequest("Nesting depth exceeds 5".to_string()));
                 }
             }
             b'}' | b']' if !in_string => {
@@ -28,7 +49,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
         }
     }
     if in_string || depth != 0 {
-        return Err(EdgeError::BadRequest(
+        return ::axiom::err!(EdgeError::BadRequest(
             "Malformed JSON byte stream".to_string(),
         ));
     }
@@ -53,13 +74,13 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
     {
         root_props += 1;
         if root_props > 50 {
-            return Err(EdgeError::BadRequest("Too many properties".to_string()));
+            return ::axiom::err!(EdgeError::BadRequest("Too many properties".to_string()));
         }
         let name = reader
             .next_name()
             .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
         if name.len() > 255 {
-            return Err(EdgeError::BadRequest("Key too long".to_string()));
+            return ::axiom::err!(EdgeError::BadRequest("Key too long".to_string()));
         }
 
         match name {
@@ -78,7 +99,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
                     lvl.as_str(),
                     "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL"
                 ) {
-                    return Err(EdgeError::BadRequest("Invalid level".to_string()));
+                    return ::axiom::err!(EdgeError::BadRequest("Invalid level".to_string()));
                 }
                 level = Some(lvl);
             }
@@ -87,7 +108,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
                     .next_string()
                     .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
                 if msg.len() > 32768 {
-                    return Err(EdgeError::BadRequest("Message too long".to_string()));
+                    return ::axiom::err!(EdgeError::BadRequest("Message too long".to_string()));
                 }
                 message = Some(msg);
             }
@@ -96,7 +117,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
                     .next_string()
                     .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
                 if app.len() > 255 {
-                    return Err(EdgeError::BadRequest("App name too long".to_string()));
+                    return ::axiom::err!(EdgeError::BadRequest("App name too long".to_string()));
                 }
                 app_name = Some(app);
             }
@@ -113,17 +134,17 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
                         .next_string()
                         .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
                     if code.len() > 255 {
-                        return Err(EdgeError::BadRequest("Error code too long".to_string()));
+                        return ::axiom::err!(EdgeError::BadRequest("Error code too long".to_string()));
                     }
                     error_code = Some(code);
                 }
             }
             "attributes" => {
-                flatten_attributes(
+                try_fallible!(flatten_attributes(
                     &mut reader,
                     &mut attribute_keys,
                     &mut attribute_values_string,
-                )?;
+                ));
             }
             _ => {
                 reader
@@ -136,7 +157,7 @@ pub fn parse_and_validate_log(bytes: &[u8]) -> Result<DomainLog, EdgeError> {
         .end_object()
         .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
 
-    Ok(DomainLog::builder()
+    ::axiom::ok!(DomainLog::builder()
         .timestamp(timestamp.ok_or_else(|| EdgeError::BadRequest("Missing timestamp".into()))?)
         .level(level.ok_or_else(|| EdgeError::BadRequest("Missing level".into()))?)
         .message(message.ok_or_else(|| EdgeError::BadRequest("Missing message".into()))?)
@@ -163,7 +184,7 @@ fn flatten_attributes(
     reader: &mut JsonStreamReader<&[u8]>,
     keys: &mut Vec<String>,
     values: &mut Vec<String>,
-) -> Result<(), EdgeError> {
+) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<EdgeError>>> {
     let mut stack = Vec::new();
 
     let vt = reader
@@ -193,13 +214,13 @@ fn flatten_attributes(
             reader
                 .next_null()
                 .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
-            return Ok(());
+            return ::axiom::ok!(());
         }
         _ => {
-            let val = next_scalar_as_string(reader)?;
+            let val = try_fallible!(next_scalar_as_string(reader));
             keys.push("attributes".to_string());
             values.push(val);
-            return Ok(());
+            return ::axiom::ok!(());
         }
     }
 
@@ -212,13 +233,13 @@ fn flatten_attributes(
                 {
                     *count += 1;
                     if *count > 50 {
-                        return Err(EdgeError::BadRequest("Too many properties".to_string()));
+                        return ::axiom::err!(EdgeError::BadRequest("Too many properties".to_string()));
                     }
                     let key = reader
                         .next_name()
                         .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
                     if key.len() > 255 {
-                        return Err(EdgeError::BadRequest("Key too long".to_string()));
+                        return ::axiom::err!(EdgeError::BadRequest("Key too long".to_string()));
                     }
                     let full_key = if prefix.is_empty() {
                         key.to_string()
@@ -252,7 +273,7 @@ fn flatten_attributes(
                             });
                         }
                         _ => {
-                            let val = next_scalar_as_string(reader)?;
+                            let val = try_fallible!(next_scalar_as_string(reader));
                             keys.push(full_key);
                             values.push(val);
                             stack.push(current);
@@ -275,7 +296,7 @@ fn flatten_attributes(
                 {
                     *count += 1;
                     if *count > 250 {
-                        return Err(EdgeError::BadRequest("Array too large".to_string()));
+                        return ::axiom::err!(EdgeError::BadRequest("Array too large".to_string()));
                     }
                     let full_key = format!("{}[{}]", prefix, index);
                     *index += 1;
@@ -306,7 +327,7 @@ fn flatten_attributes(
                             });
                         }
                         _ => {
-                            let val = next_scalar_as_string(reader)?;
+                            let val = try_fallible!(next_scalar_as_string(reader));
                             keys.push(full_key);
                             values.push(val);
                             stack.push(current);
@@ -320,35 +341,35 @@ fn flatten_attributes(
             }
         }
     }
-    Ok(())
+    ::axiom::ok!(())
 }
 
-fn next_scalar_as_string(reader: &mut JsonStreamReader<&[u8]>) -> Result<String, EdgeError> {
+fn next_scalar_as_string(reader: &mut JsonStreamReader<&[u8]>) -> ::axiom::result::Fallible<::core::result::Result<String, ::std::vec::Vec<EdgeError>>> {
     let vt = reader
         .peek()
         .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
     match vt {
-        ValueType::String => reader
+        ValueType::String => ::axiom::ok!(try_local!(reader
             .next_string()
-            .map_err(|e| EdgeError::BadRequest(e.to_string())),
-        ValueType::Number => reader
+            .map_err(|e| EdgeError::BadRequest(e.to_string())))),
+        ValueType::Number => ::axiom::ok!(try_local!(reader
             .next_number_as_string()
-            .map_err(|e| EdgeError::BadRequest(e.to_string())),
-        ValueType::Boolean => Ok(reader
+            .map_err(|e| EdgeError::BadRequest(e.to_string())))),
+        ValueType::Boolean => ::axiom::ok!(try_local!(reader
             .next_bool()
-            .map_err(|e| EdgeError::BadRequest(e.to_string()))?
+            .map_err(|e| EdgeError::BadRequest(e.to_string())))
             .to_string()),
         ValueType::Null => {
-            reader
+            try_local!(reader
                 .next_null()
-                .map_err(|e| EdgeError::BadRequest(e.to_string()))?;
-            Ok("null".to_string())
+                .map_err(|e| EdgeError::BadRequest(e.to_string())));
+            ::axiom::ok!("null".to_string())
         }
-        _ => Err(EdgeError::BadRequest("Expected scalar value".to_string())),
+        _ => return ::axiom::err!(EdgeError::BadRequest("Expected scalar value".to_string())),
     }
 }
 
-pub fn validate_jwt(token: &str, public_key_pem: &[u8]) -> Result<JwtClaims, EdgeError> {
+pub fn validate_jwt(token: &str, public_key_pem: &[u8]) -> ::axiom::result::Fallible<::core::result::Result<JwtClaims, ::std::vec::Vec<EdgeError>>> {
     let key = DecodingKey::from_rsa_pem(public_key_pem)
         .tap_err(|e| ::tracing::error!(error = %e, "Invalid JWT public key PEM"))
         .map_err(|_| EdgeError::Unauthorized("Invalid key".to_string()))?;
@@ -361,13 +382,13 @@ pub fn validate_jwt(token: &str, public_key_pem: &[u8]) -> Result<JwtClaims, Edg
         .tap_err(|e| ::tracing::error!(error = %e, "JWT decode failed"))
         .map_err(|e| EdgeError::Unauthorized(e.to_string()))?;
 
-    Ok(token_data.claims)
+    ::axiom::ok!(token_data.claims)
 }
 
-pub fn check_app_grant(claims: &JwtClaims, app_name: &str) -> Result<(), EdgeError> {
+pub fn check_app_grant(claims: &JwtClaims, app_name: &str) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<EdgeError>>> {
     if claims.app_grants.iter().any(|g| g == "*" || g == app_name) {
-        Ok(())
+        ::axiom::ok!(())
     } else {
-        Err(EdgeError::Forbidden)
+        return ::axiom::err!(EdgeError::Forbidden);
     }
 }

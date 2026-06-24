@@ -1,6 +1,7 @@
-use crate::edge::models::axiom::Erratum;
+use axiom::Erratum;
+use thiserror::Error;
 
-#[derive(Debug, Erratum)]
+#[derive(::core::fmt::Debug, ::axiom::Erratum, ::thiserror::Error)]
 pub enum DbWriterError {
     #[error("ConnectionDropped: {0}")]
     ConnectionDropped(String),

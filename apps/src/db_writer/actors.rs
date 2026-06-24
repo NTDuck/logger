@@ -4,13 +4,13 @@ use crate::normalization::models::NormalizedLog;
 use prometheus::IntCounterVec;
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::Message;
-use std::sync::Arc;
-use std::time::Duration;
+use ::std::sync::Arc;
+use ::std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{interval, sleep};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Clone)]
+#[derive(::core::clone::Clone)]
 pub struct DbWriterMetrics {
     pub events_processed_total: IntCounterVec,
 }
@@ -115,7 +115,7 @@ async fn flush_subroutine(
     let mut attempt = 0;
     loop {
         match writer.write_batch(&batch).await {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 metrics
                     .events_processed_total
                     .with_label_values(&["db_writer", "success"])
@@ -125,10 +125,24 @@ async fn flush_subroutine(
                 ::tracing::info!("Successfully flushed batch to ClickHouse");
                 return;
             }
-            Err(e) => {
+            Ok(Err(errs)) => {
                 attempt += 1;
-                let delay = std::cmp::min(1000 * (2u64.pow(attempt)), 60000);
-                ::tracing::error!(error = %e, delay_ms = delay, "ClickHouse write failed, entering backoff");
+                let delay = ::std::cmp::min(1000 * (2u64.pow(attempt)), 60000);
+                ::tracing::error!(error = ?errs, delay_ms = delay, "ClickHouse write failed (business errors), entering backoff");
+
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        return;
+                    }
+                    _ = sleep(Duration::from_millis(delay)) => {
+                        continue;
+                    }
+                }
+            }
+            Err(sys_err) => {
+                attempt += 1;
+                let delay = ::std::cmp::min(1000 * (2u64.pow(attempt)), 60000);
+                ::tracing::error!(error = %sys_err, delay_ms = delay, "ClickHouse write failed (system error), entering backoff");
 
                 tokio::select! {
                     _ = cancel_token.cancelled() => {

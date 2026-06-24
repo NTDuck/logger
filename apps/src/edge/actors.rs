@@ -5,11 +5,11 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use prometheus::{Counter, IntCounterVec};
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tap::TapFallible;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Clone)]
+#[derive(::core::clone::Clone)]
 pub struct AppState {
     pub producer: Arc<dyn LogProducer>,
     pub jwt_public_key: Arc<Vec<u8>>,
@@ -40,7 +40,7 @@ pub async fn ingest_logs(
     // 1. Slowloris defense: Apply strict timeout directly at the socket stream-reading phase
     // (This enforces the tower::timeout::TimeoutLayer intent directly at the extraction point)
     let body_bytes = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
+        ::std::time::Duration::from_secs(5),
         axum::body::to_bytes(req.into_body(), 256 * 1024),
     )
     .await
@@ -65,13 +65,25 @@ pub async fn ingest_logs(
             .and_then(|s| s.strip_prefix("Bearer "))
             .ok_or_else(|| EdgeError::Unauthorized("Missing token".into()))?;
 
-        let claims = validate_jwt(auth_header, &state.jwt_public_key)?;
+                let claims = match validate_jwt(auth_header, &state.jwt_public_key) {
+            Ok(Ok(claims)) => claims,
+            Ok(Err(errs)) => return Err(errs.into_iter().next().unwrap()),
+            Err(sys_err) => return Err(EdgeError::BadRequest(sys_err.to_string())),
+        };
 
         // 4. Streaming Deserialization & Validation
-        let domain_log = parse_and_validate_log(&body_bytes)?;
+                let domain_log = match parse_and_validate_log(&body_bytes) {
+            Ok(Ok(log)) => log,
+            Ok(Err(errs)) => return Err(errs.into_iter().next().unwrap()),
+            Err(sys_err) => return Err(EdgeError::BadRequest(sys_err.to_string())),
+        };
 
         // 5. Grant check
-        check_app_grant(&claims, &domain_log.app_name)?;
+                match check_app_grant(&claims, &domain_log.app_name) {
+            Ok(Ok(_)) => {}
+            Ok(Err(errs)) => return Err(errs.into_iter().next().unwrap()),
+            Err(sys_err) => return Err(EdgeError::BadRequest(sys_err.to_string())),
+        }
 
         // 6. Cancellation-Safe Kafka Production
         let producer = state.producer.clone();
@@ -86,17 +98,21 @@ pub async fn ingest_logs(
                 }
 
                 match producer.produce(&domain_log).await {
-                    Ok(_) => break Ok(()),
-                    Err(e) => {
+                    Ok(Ok(_)) => break Ok(()),
+                    Ok(Err(errs)) => {
+                        let e = errs.into_iter().next().unwrap();
                         if attempt < 3 {
                             attempt += 1;
                             tokio::select! {
                                 _ = cancel_token.cancelled() => return Err(EdgeError::KafkaProduceError("Cancelled".into())),
-                                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+                                _ = tokio::time::sleep(::std::time::Duration::from_millis(100)) => {}
                             }
                             continue;
                         }
                         break Err(e);
+                    }
+                    Err(sys_err) => {
+                        break Err(EdgeError::KafkaProduceError(sys_err.to_string()));
                     }
                 }
             }

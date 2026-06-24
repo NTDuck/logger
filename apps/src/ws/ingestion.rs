@@ -2,7 +2,7 @@ use crate::normalization::models::NormalizedLog;
 use crate::ws::models::BroadcastMessage;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
-use std::sync::Arc;
+use ::std::sync::Arc;
 use tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
@@ -12,7 +12,7 @@ pub async fn ingestion_loop(
     consumer: Arc<StreamConsumer>,
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     cancel_token: CancellationToken,
-) -> Result<(), crate::ws::models::WSError> {
+) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<crate::ws::models::WSError>>> {
     loop {
         tokio::select! {
             _ = cancel_token.cancelled() => {
@@ -44,11 +44,11 @@ pub async fn ingestion_loop(
                             .tap_err(|e| ::tracing::error!(error = %e, "Kafka offset commit failed"));
                     }
                     Err(e) => {
-                        return Err(crate::ws::models::WSError::ConsumerError(e.to_string()));
+                        return ::axiom::err!(crate::ws::models::WSError::ConsumerError(e.to_string()));
                     }
                 }
             }
         }
     }
-    Ok(())
+    ::axiom::ok!(())
 }

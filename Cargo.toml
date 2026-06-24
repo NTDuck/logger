@@ -1,10 +1,16 @@
+[workspace]
+members = ["crates/axiom", "crates/axiom-derive"]
+
 [package]
 name = "logger"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0"
 async-trait = "0.1.89"
+axiom = { path = "crates/axiom" }
+axiom-derive = { path = "crates/axiom-derive" }
 axum = { version = "0.8.9", features = ["ws"] }
 bon = "3.9.3"
 bytes = "1.12.0"

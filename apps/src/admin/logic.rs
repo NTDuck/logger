@@ -1,37 +1,46 @@
 use crate::admin::models::{AdminConfigPayload, AdminError, AlertConfig};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
-use serde::Deserialize;
+use ::serde::Deserialize;
 use tap::TapFallible;
 
-#[derive(Debug, Deserialize)]
+#[derive(::core::fmt::Debug, ::serde::Deserialize)]
 struct Claims {
     pub roles: Option<Vec<String>>,
 }
 
-pub fn validate_admin_claims(token: &str, decoding_key: &DecodingKey) -> Result<(), AdminError> {
+pub fn validate_admin_claims(
+    token: &str,
+    decoding_key: &DecodingKey,
+) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AdminError>>> {
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
     validation.validate_nbf = true;
 
-    let token_data = decode::<Claims>(token, decoding_key, &validation)
-        .tap_err(|e| ::tracing::error!(error = %e, "JWT verification failed in Admin API"))
-        .map_err(|_| AdminError::Unauthorized)?;
+    let token_data = match decode::<Claims>(token, decoding_key, &validation) {
+        Ok(td) => td,
+        Err(e) => {
+            ::tracing::error!(error = %e, "JWT verification failed in Admin API");
+            return ::axiom::err!(AdminError::Unauthorized);
+        }
+    };
 
     let roles = token_data.claims.roles.unwrap_or_default();
     if !roles.contains(&"admin".to_string()) {
         ::tracing::warn!("Valid JWT but missing admin role claim");
-        return Err(AdminError::Unauthorized);
+        return ::axiom::err!(AdminError::Unauthorized);
     }
 
-    Ok(())
+    ::axiom::ok!(())
 }
 
-pub fn validate_payload(payload: AdminConfigPayload) -> Result<AdminConfigPayload, AdminError> {
+pub fn validate_payload(
+    payload: AdminConfigPayload,
+) -> ::axiom::result::Fallible<::core::result::Result<AdminConfigPayload, ::std::vec::Vec<AdminError>>> {
     if payload.threshold == 0 || payload.window_seconds == 0 {
         ::tracing::warn!("Invalid payload: threshold or window_seconds is zero");
-        return Err(AdminError::InvalidPayload);
+        return ::axiom::err!(AdminError::InvalidPayload);
     }
-    Ok(payload)
+    ::axiom::ok!(payload)
 }
 
 pub fn build_alert_config(payload: AdminConfigPayload) -> AlertConfig {

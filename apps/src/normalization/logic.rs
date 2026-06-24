@@ -1,5 +1,14 @@
 use regex::Regex;
-use std::sync::LazyLock;
+use ::std::sync::LazyLock;
+
+macro_rules! try_local {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => return ::axiom::err!(e),
+        }
+    };
+}
 
 static PII_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![

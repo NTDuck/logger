@@ -16,7 +16,7 @@ impl AITagBatchAccumulator {
     pub fn push(&mut self, tag: AITagMessage) -> Option<Vec<AITagMessage>> {
         self.buffer.push(tag);
         if self.buffer.len() >= self.limit {
-            let flush_batch = std::mem::replace(&mut self.buffer, Vec::with_capacity(self.limit));
+            let flush_batch = ::std::mem::replace(&mut self.buffer, Vec::with_capacity(self.limit));
             Some(flush_batch)
         } else {
             None
@@ -25,7 +25,7 @@ impl AITagBatchAccumulator {
 
     pub fn flush_remaining(&mut self) -> Option<Vec<AITagMessage>> {
         if !self.buffer.is_empty() {
-            let flush_batch = std::mem::replace(&mut self.buffer, Vec::with_capacity(self.limit));
+            let flush_batch = ::std::mem::replace(&mut self.buffer, Vec::with_capacity(self.limit));
             Some(flush_batch)
         } else {
             None

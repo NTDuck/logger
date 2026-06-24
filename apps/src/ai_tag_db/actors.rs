@@ -2,8 +2,8 @@ use crate::ai_tag_db::logic::AITagBatchAccumulator;
 use crate::ai_tag_db::models::{AITagClickHouseWriter, AITagMessage};
 use prometheus::IntCounterVec;
 use rdkafka::{consumer::StreamConsumer, Message as KafkaMessage};
-use std::sync::Arc;
-use std::time::Duration;
+use ::std::sync::Arc;
+use ::std::time::Duration;
 use tap::TapFallible;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -119,24 +119,32 @@ async fn flush_subroutine(
             }
         }
 
-        match writer
-            .write_batch(batch.clone())
-            .await
-            .tap_err(|e| ::tracing::error!(error = %e, "AI tag flush failed, retrying..."))
-        {
-            Ok(_) => {
+        match writer.write_batch(batch.clone()).await {
+            Ok(Ok(_)) => {
                 events_processed_total
                     .with_label_values(&["ai-tag-db", "success"])
                     .inc_by(batch_len);
                 return true;
             }
-            Err(_) => {
+            Ok(Err(errs)) => {
+                ::tracing::error!(errors = ?errs, "AI tag flush failed, retrying...");
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
                         return false;
                     }
                     _ = tokio::time::sleep(backoff) => {
-                        backoff = std::cmp::min(backoff * 2, max_backoff);
+                        backoff = ::std::cmp::min(backoff * 2, max_backoff);
+                    }
+                }
+            }
+            Err(sys_err) => {
+                ::tracing::error!(error = %sys_err, "AI tag flush system error, retrying...");
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        return false;
+                    }
+                    _ = tokio::time::sleep(backoff) => {
+                        backoff = ::std::cmp::min(backoff * 2, max_backoff);
                     }
                 }
             }

@@ -1,9 +1,10 @@
 use bon::Builder;
-use serde::{Deserialize, Serialize};
+use ::serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Builder, PartialEq)]
+#[derive(::core::fmt::Debug, ::core::clone::Clone, ::serde::Serialize, ::serde::Deserialize, ::bon::Builder, PartialEq)]
+#[builder(on(::axiom::string::String, into))]
 pub struct NormalizedLog {
     pub log_id: Uuid,
     pub timestamp: String,
@@ -15,7 +16,7 @@ pub struct NormalizedLog {
     pub attribute_values_string: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(::core::fmt::Debug, ::core::clone::Clone, ::serde::Serialize, ::serde::Deserialize, PartialEq)]
 pub struct DLQEnvelope {
     pub failed_at: String,
     pub error_reason: String,
@@ -42,7 +43,7 @@ impl DLQEnvelope {
             .map(|b| format!("{:02x}", b))
             .collect::<String>();
 
-        let truncate_len = std::cmp::min(raw_payload.len(), 2048);
+        let truncate_len = ::std::cmp::min(raw_payload.len(), 2048);
         let original_payload_truncated =
             String::from_utf8_lossy(&raw_payload[..truncate_len]).into_owned();
 
@@ -56,7 +57,7 @@ impl DLQEnvelope {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(::core::fmt::Debug, ::thiserror::Error)]
 pub enum NormalizationError {
     #[error("Poison Pill: {0}")]
     PoisonPill(String),

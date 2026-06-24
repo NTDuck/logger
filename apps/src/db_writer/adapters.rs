@@ -26,12 +26,16 @@ impl ClickHouseHttpWriter {
 #[async_trait]
 impl ClickHouseWriter for ClickHouseHttpWriter {
     #[::tracing::instrument(skip_all)]
-    async fn write_batch(&self, batch: &[NormalizedLog]) -> Result<(), DbWriterError> {
+    async fn write_batch(&self, batch: &[NormalizedLog]) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<DbWriterError>>> {
         let mut payload = String::with_capacity(batch.len() * 256);
         for log in batch {
-            let json = serde_json::to_string(log)
+            let json_res = serde_json::to_string(log)
                 .tap_err(|e| ::tracing::error!(error = %e, "JSON serialization failed"))
-                .map_err(|e| DbWriterError::BatchInsertFailed(e.to_string()))?;
+                .map_err(|e| DbWriterError::BatchInsertFailed(e.to_string()));
+            let json = match json_res {
+                Ok(j) => j,
+                Err(e) => return ::axiom::errs!(vec![e]),
+            };
             payload.push_str(&json);
             payload.push('\n');
         }
@@ -50,17 +54,22 @@ impl ClickHouseWriter for ClickHouseHttpWriter {
             .tap_err(|e| {
                 ::tracing::error!(error = %e, table = %self.table, "ClickHouse INSERT request failed")
             })
-            .map_err(|e| DbWriterError::ConnectionDropped(e.to_string()))?;
+            .map_err(|e| DbWriterError::ConnectionDropped(e.to_string()));
+
+        let response = match response {
+            Ok(r) => r,
+            Err(e) => return ::axiom::errs!(vec![e]),
+        };
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             ::tracing::error!(status = %status, body = %body, "ClickHouse INSERT returned non-success status");
-            return Err(DbWriterError::BatchInsertFailed(body));
+            return ::axiom::errs!(vec![DbWriterError::BatchInsertFailed(body)]);
         }
 
         ::tracing::debug!(rows = batch.len(), table = %self.table, "ClickHouse INSERT batch committed");
 
-        Ok(())
+        ::axiom::ok!(())
     }
 }

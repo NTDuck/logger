@@ -20,11 +20,11 @@ impl OnnxClassifier {
 #[async_trait]
 impl AIClassifier for OnnxClassifier {
     #[::tracing::instrument(skip_all)]
-    async fn classify(&self, log_id: Uuid, message: &str) -> Result<AITag, AIError> {
+    async fn classify(&self, log_id: Uuid, message: &str) -> ::axiom::result::Fallible<::core::result::Result<AITag, ::std::vec::Vec<AIError>>> {
         let model_version = self.model_version.clone();
         let msg = message.to_owned();
 
-        let (tag, confidence) = tokio::task::spawn_blocking(move || {
+        let res = tokio::task::spawn_blocking(move || {
             // In a real application, we would prepare ndarray tensors from `msg`
             // and run `session.run(...)`. For now we satisfy the compiler.
             let _ = msg;
@@ -32,9 +32,14 @@ impl AIClassifier for OnnxClassifier {
         })
         .await
         .map_err(|e| AIError::InferenceError(e.to_string()))
-        .tap_err(|e| ::tracing::error!(error = %e, "ONNX classification failed"))?;
+        .tap_err(|e| ::tracing::error!(error = %e, "ONNX classification failed"));
 
-        Ok(build_ai_tag(log_id, model_version, tag, confidence))
+        let (tag, confidence) = match res {
+            Ok(v) => v,
+            Err(e) => return ::axiom::errs!(vec![e]),
+        };
+
+        ::axiom::ok!(build_ai_tag(log_id, model_version, tag, confidence))
     }
 }
 
@@ -52,20 +57,25 @@ impl KafkaTagPublisher {
 #[async_trait]
 impl TagStreamPublisher for KafkaTagPublisher {
     #[::tracing::instrument(skip_all)]
-    async fn publish_patch(&self, tag: &AITag) -> Result<(), AIError> {
-        let payload =
-            serde_json::to_vec(tag).map_err(|e| AIError::StreamPublishError(e.to_string()))?;
+    async fn publish_patch(&self, tag: &AITag) -> ::axiom::result::Fallible<::core::result::Result<(), ::std::vec::Vec<AIError>>> {
+        let payload = match serde_json::to_vec(tag).map_err(|e| AIError::StreamPublishError(e.to_string())) {
+            Ok(p) => p,
+            Err(e) => return ::axiom::errs!(vec![e]),
+        };
 
         let record = FutureRecord::to(&self.topic)
             .key(tag.log_id.as_bytes())
             .payload(&payload);
 
-        self.producer
+        let res = self.producer
             .send(record, rdkafka::util::Timeout::Never)
             .await
             .map_err(|(e, _)| AIError::StreamPublishError(e.to_string()))
-            .tap_err(|e| ::tracing::error!(error = %e, "Failed to publish AI tag patch"))?;
+            .tap_err(|e| ::tracing::error!(error = %e, "Failed to publish AI tag patch"));
 
-        Ok(())
+        match res {
+            Ok(_) => ::axiom::ok!(()),
+            Err(e) => ::axiom::errs!(vec![e]),
+        }
     }
 }
