@@ -96,3 +96,9 @@ cargo run --release -- --role ai-tag-projection
 - **Kafka Backpressure**: Bounded `mpsc` channels correctly separate `Consumer` tasks from processing logic, ensuring the network listener never drops bytes due to application latency.
 - **Terminal Telemetry Gates**: Prometheus metrics (`logger_events_processed_total`) are incremented strictly _after_ I/O tasks are `await`ed and resolved successfully.
 - **Zero-Block Async**: Blocking I/O (`std::thread::sleep`, `reqwest::blocking`) is strictly prohibited to prevent Tokio executor thread starvation.
+
+## Architecture Council Audit
+
+The entire codebase and container infrastructure have been rigorously evaluated and statically analyzed by the LLM Architecture Council against 7 specialized personas (Tokio Warden, Observability Inspector, Topology Tracer, Boundary Enforcer, DevOps & DX Architect, and Hardened Specs Enforcer). 
+
+Read the definitive **[Monolith Architecture Code Audit](specs/05-execution/v5/eval/monolith-code-audit.md)** for details on the attack vectors tested and the surgical fixes applied to guarantee production readiness.
