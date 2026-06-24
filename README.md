@@ -90,7 +90,7 @@ Each component of the system is launched using the `--role` flag. The monolith u
 - `--redis-url` / `REDIS_URL` (Default: `redis://localhost:6379/`)
 - `--telegram-token` / `TELEGRAM_TOKEN`
 - `--telegram-chat-id` / `TELEGRAM_CHAT_ID`
-- `--admin-api-url` / `ADMIN_API_URL` (Default: `http://localhost:8081`)
+- `--admin-api-url` / `ADMIN_API_URL` (Default: `http://localhost:8082`)
 
 ### Starting the Services Manually:
 

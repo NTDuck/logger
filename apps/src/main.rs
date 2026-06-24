@@ -31,7 +31,7 @@ struct Args {
     #[arg(long, env = "TELEGRAM_CHAT_ID", default_value = "")]
     telegram_chat_id: String,
 
-    #[arg(long, env = "ADMIN_API_URL", default_value = "http://localhost:8081")]
+    #[arg(long, env = "ADMIN_API_URL", default_value = "http://localhost:8082")]
     admin_api_url: String,
 }
 
@@ -367,8 +367,8 @@ async fn main() -> anyhow::Result<()> {
         registry.register(Box::new(active_connections.clone()))?;
         registry.register(Box::new(events_processed_total.clone()))?;
 
-        // Just a dummy decoding key for the monolith. In real life it'd come from a config.
-        let decoding_key = Arc::new(DecodingKey::from_secret("secret".as_ref()));
+        // Parse the JWT RSA public key from the environment
+        let decoding_key = Arc::new(DecodingKey::from_rsa_pem(args.jwt_public_key.as_bytes())?);
 
         let state = AppState {
             broadcast_tx: broadcast_tx.clone(),
@@ -431,7 +431,7 @@ async fn main() -> anyhow::Result<()> {
         let registry = Registry::new();
         registry.register(Box::new(events_processed_total.clone()))?;
 
-        let decoding_key = Arc::new(DecodingKey::from_secret("secret".as_ref()));
+        let decoding_key = Arc::new(DecodingKey::from_rsa_pem(args.jwt_public_key.as_bytes())?);
 
         let state = AdminAppState {
             writer,

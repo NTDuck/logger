@@ -153,7 +153,7 @@ impl HttpConfigSubscriber {
 #[async_trait]
 impl ConfigSubscriber for HttpConfigSubscriber {
     async fn fetch_initial(&self) -> ::axiom::result::Fallible<::core::result::Result<AlertConfig, ::std::vec::Vec<AlertError>>> {
-        let url = format!("{}/api/v1/alert-config", self.admin_api_url);
+        let url = format!("{}/v1/admin/config", self.admin_api_url);
         let resp = self
             .client
             .get(&url)
@@ -164,8 +164,8 @@ impl ConfigSubscriber for HttpConfigSubscriber {
 
         if !resp.status().is_success() {
             ::tracing::error!(status = ?resp.status(), "Admin API returned non-2xx");
-            if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                ::tracing::info!("Admin API config endpoint not found. Using default mock config.");
+            if resp.status() == reqwest::StatusCode::NOT_FOUND || resp.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED {
+                ::tracing::info!("Admin API config endpoint not found or method not allowed. Using default mock config.");
                 return ::axiom::ok!(AlertConfig {
                     config_id: uuid::Uuid::nil(),
                     threshold: 100,

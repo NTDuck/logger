@@ -75,17 +75,17 @@ impl ConfigWriter for AdminConfigWriter {
 
         let mut conn = self.redis_conn.lock().await;
 
-        match conn.publish::<_, _, ()>("admin:config_updates", json_payload).await {
-            Ok(_) => (),
+        match conn.publish::<_, _, ()>("alert-config-updates", json_payload).await {
+            Ok(_) => {},
             Err(e) => {
-                ::tracing::error!(error = %e, "Redis PUBLISH to admin:config_updates failed");
+                ::tracing::error!(error = %e, "Redis PUBLISH to alert-config-updates failed");
                 return ::axiom::err!(AdminError::BroadcastFailed(
                     e.to_string()
                 ));
             }
         };
 
-        ::tracing::debug!(config_id = %config.config_id, channel = "admin:config_updates", "Config update event published to Redis Pub/Sub");
+        ::tracing::debug!(config_id = %config.config_id, channel = "alert-config-updates", "Config update event published to Redis Pub/Sub");
         ::axiom::ok!(())
     }
 }

@@ -59,6 +59,7 @@ services:
     env_file: .env
     environment:
       - KAFKA_BROKERS=redpanda:29092
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
     ports:
       - 8080:8080
     depends_on:
@@ -105,6 +106,9 @@ services:
     environment:
       - KAFKA_BROKERS=redpanda:29092
       - REDIS_URL=redis://redis:6379/
+      - ADMIN_API_URL=http://logger-admin-api:8082
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     depends_on:
       redpanda-init:
         condition: service_completed_successfully
@@ -117,6 +121,7 @@ services:
     env_file: .env
     environment:
       - KAFKA_BROKERS=redpanda:29092
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
     ports:
       - 8081:8081
     depends_on:
@@ -130,6 +135,7 @@ services:
     environment:
       - CLICKHOUSE_URL=http://clickhouse:8123
       - REDIS_URL=redis://redis:6379/
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
     ports:
       - 8082:8082
     depends_on:

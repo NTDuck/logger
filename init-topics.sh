@@ -10,5 +10,6 @@ rpk topic create logs-raw -p 3 || true
 rpk topic create logs-normalized -p 3 || true
 rpk topic create alerts-priority-stream -p 3 || true
 rpk topic create ai-tags-stream -p 3 || true
+rpk topic create logs-dlq -p 3 || true
 
 echo "Topics created successfully."
