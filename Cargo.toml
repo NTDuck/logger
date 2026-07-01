@@ -5,6 +5,10 @@ members = [
     "logger/view",
     "logger/server",
 ]
+exclude = [
+    "proto2",
+    "proto3"
+]
 resolver = "2"
 
 [workspace.package]
