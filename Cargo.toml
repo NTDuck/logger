@@ -3,6 +3,7 @@ members = [
     "logger/axiom",
     "logger/axiom-derive",
     "logger/view",
+    "logger/server",
 ]
 resolver = "2"
 
