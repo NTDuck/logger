@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogRider Dashboard</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; }
+        h1 { border-bottom: 1px solid #333; padding-bottom: 10px; }
+        #logs { background: #1e1e1e; padding: 15px; border-radius: 8px; max-height: 80vh; overflow-y: auto; }
+        .log-entry { margin-bottom: 10px; padding: 10px; border-left: 4px solid #4CAF50; background: #2a2a2a; border-radius: 4px; font-family: monospace; }
+        .log-entry.error { border-left-color: #f44336; }
+        .log-entry.warning { border-left-color: #ff9800; }
+        .timestamp { color: #888; font-size: 0.9em; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <h1>LogRider Dashboard</h1>
+    <div id="logs">
+        <p style="color: #888;">Waiting for logs...</p>
+    </div>
+
+    <script>
+        const logsContainer = document.getElementById('logs');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+        
+        let isFirstMessage = true;
+
+        function connect() {
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Connected to WebSocket server');
+                logsContainer.innerHTML = '<p style="color: #888;">Connected. Waiting for logs...</p>';
+            };
+
+            ws.onmessage = (event) => {
+                if (isFirstMessage) {
+                    logsContainer.innerHTML = '';
+                    isFirstMessage = false;
+                }
+
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (e) {
+                    data = { message: event.data, level: 'info' };
+                }
+
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${data.level ? data.level.toLowerCase() : ''}`;
+                
+                const time = data.timestamp || new Date().toISOString();
+                const level = data.level ? `[${data.level.toUpperCase()}]` : '';
+                const msg = data.message || JSON.stringify(data);
+
+                entry.innerHTML = `<span class="timestamp">${time}</span> <strong>${level}</strong> ${msg}`;
+                
+                logsContainer.prepend(entry);
+                
+                // Keep max 100 logs
+                if (logsContainer.children.length > 100) {
+                    logsContainer.removeChild(logsContainer.lastChild);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket connection closed. Reconnecting in 5s...');
+                setTimeout(connect, 5000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+                ws.close();
+            };
+        }
+
+        connect();
+    </script>
+</body>
+</html>

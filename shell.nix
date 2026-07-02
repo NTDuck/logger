@@ -10,7 +10,12 @@ pkgs.mkShell {
     pkgs.cmake # Also add cmake
     pkgs.gcc # Already present but explicit is fine
 
+    pkgs.clickhouse
+    pkgs.clickhouse-cli
     pkgs.redpanda-client
+    pkgs.redis
+
+    pkgs.websocat
   ];
 
   shellHook = ''
